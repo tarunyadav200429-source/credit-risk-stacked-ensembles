@@ -1,0 +1,632 @@
+\chapter{Methodology}\doublespacing
+\label{Chapter3}
+\lhead{Chapter III.}
+
+The previous chapter introduced the eight individual classifiers.
+This chapter describes the methodological framework that ties them
+into a single, reproducible pipeline. The framework has five
+ingredients:
+\begin{itemize}
+ \item a sweep of four \emph{feature-selection} strategies
+ (Section~\ref{sec:fs}),
+ \item a class-imbalance handling layer combining \emph{SMOTE} and
+ \emph{GHOST} threshold tuning (Section~\ref{sec:imbalance}),
+ \item a \emph{Bayesian-optimisation} hyperparameter-tuning protocol
+ for the heavyweight learners (Section~\ref{sec:bayes}),
+ \item a \emph{stacked-ensemble configuration} with five candidate
+ meta-learners and an objective best-meta selection rule
+ (Section~\ref{sec:stacker-config}),
+ \item and the \emph{GA-MaxAccLogit} meta-learner --- an adaptation
+ of the ProfLogit method of \citet{stripling2018proflogit} ---
+ described in Section~\ref{sec:gamal}.
+\end{itemize}
+Each subsection states the choice we make, the rationale, and the
+specific hyperparameters used in the experiments.
+
+\section{Feature Selection}
+\label{sec:fs}
+
+A feature-selection step is included for two reasons: noise reduction
+in the input space tends to improve the generalisation of distance-
+and kernel-based classifiers, and the empirical pattern of which
+features each algorithm ``wants'' is itself of analytic interest.
+Rather than commit to a single selection strategy, we sweep four:
+
+\textbf{Full.} All features are kept, after one-hot encoding the
+categorical attributes. This is the no-selection baseline against
+which the other three are measured.
+
+\textbf{Recursive Feature Elimination (RFE).} Starting from the full
+feature set, RFE iteratively trains a base
+classifier, ranks the features by the magnitude of the classifier's
+coefficient or feature importance, and discards the lowest-ranked
+feature. We use logistic regression as the underlying classifier and
+fix the number of features to retain at $p/2$, rounded.
+
+\textbf{Lasso-LR.} An $L_1$-penalised logistic regression
+ is fitted on the training data; only
+the features with non-zero coefficients are retained. The penalty
+strength $\lambda_{\mathrm{L}1}$ is chosen by 5-fold cross-validation
+on the same training data.
+
+\textbf{Forward Selection.} Starting from the empty feature set,
+features are added one at a time in the order that maximises the
+$F_1$-macro of a logistic-regression classifier on 5-fold
+cross-validation. Selection stops when adding the next feature no
+longer improves the cross-validated score by more than a small
+tolerance.
+
+For each (dataset, feature-selection) pair, all eight classifiers
+are trained and evaluated separately. The benchmark thus contains
+$4\text{ datasets}\times 4\text{ FS}\times 8\text{ models}=128$
+classifier rows.
+
+\subsection{Selected Feature Counts per (Dataset, FS) Pair}
+\label{sec:selected-features}
+
+Table~\ref{tab:fs-counts} reports the number of features each method
+keeps on each of the four datasets, starting from the one-hot-encoded
+input.  The Full column is the post-encoding size of the feature
+matrix (which differs from the raw attribute count when categorical
+attributes are present).
+
+\begin{table}[H]
+\centering
+\caption{Number of features retained by each FS method on each dataset
+(post one-hot encoding).  Full = baseline; RFE/Forward retain
+$\lceil p/2\rceil$; Lasso-LR retains all features with non-zero
+$L_1$ coefficient.}
+\singlespacing
+\label{tab:fs-counts}
+\small
+\begin{tabular}{l c c c c}
+\toprule
+\textbf{Dataset} & \textbf{Full} & \textbf{RFE} & \textbf{Lasso-LR} & \textbf{Forward}\\
+\midrule
+Australian & 14 & \phantom{0}7 & 12 & \phantom{0}7\\
+Japanese   & 37 & 18 & 32 & 18\\
+German     & 48 & 24 & 46 & 24\\
+Taiwan     & 23 & 11 & 21 & 11\\
+\bottomrule
+\end{tabular}
+\end{table}
+\subsection{Selected Features per Dataset}
+\label{sec:fs-features}
+
+Tables~\ref{tab:fs-aus}--\ref{tab:fs-tai} below list, for each
+dataset, the exact feature each method kept ($\checkmark$) or
+dropped (---). \ The Full column is omitted because it always
+retains every feature.  Feature names are reported as they appear
+after one-hot encoding; for the German dataset, dummy variables
+are written \texttt{Attribute$j$\_A$jc$} for the $c$-th level of the
+$j$-th raw categorical attribute (e.g.\ \texttt{Attribute1\_A14} is
+the dummy ``checking-account status = no current account'').
+
+\begin{table}[H]
+\centering
+\caption{Australian Credit --- features retained ($\checkmark$) or
+dropped (---) by each FS method.  Anonymised attributes
+A1--A14 from the UCI release.}
+\singlespacing
+\label{tab:fs-aus}
+\small
+\begin{tabular}{l c c c}
+\toprule
+\textbf{Feature} & \textbf{RFE} & \textbf{Lasso-LR} & \textbf{Forward}\\
+\midrule
+A1  & ---          & $\checkmark$ & $\checkmark$\\
+A2  & ---          & ---          & $\checkmark$\\
+A3  & ---          & $\checkmark$ & $\checkmark$\\
+A4  & $\checkmark$ & $\checkmark$ & $\checkmark$\\
+A5  & $\checkmark$ & $\checkmark$ & ---\\
+A6  & ---          & ---          & $\checkmark$\\
+A7  & $\checkmark$ & $\checkmark$ & ---\\
+A8  & $\checkmark$ & $\checkmark$ & $\checkmark$\\
+A9  & ---          & $\checkmark$ & $\checkmark$\\
+A10 & $\checkmark$ & $\checkmark$ & ---\\
+A11 & ---          & $\checkmark$ & ---\\
+A12 & ---          & $\checkmark$ & ---\\
+A13 & $\checkmark$ & $\checkmark$ & ---\\
+A14 & $\checkmark$ & $\checkmark$ & ---\\
+\midrule
+\textbf{Total} & \textbf{7/14} & \textbf{12/14} & \textbf{7/14}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Japanese Credit --- features retained ($\checkmark$) or
+dropped (---) by each FS method.  Attributes \texttt{A15, A14, A11,
+A8, A3, A2} are numeric; the rest are one-hot dummies of the original
+categorical attributes \texttt{A1, A4, A5, A6, A7, A9, A10, A12,
+A13}.  Shown in two columns to fit on one page.}
+\singlespacing
+\label{tab:fs-jap}
+\scriptsize
+\begin{tabular}{l c c c | l c c c}
+\toprule
+\textbf{Feature} & \textbf{RFE} & \textbf{Lasso} & \textbf{Fwd}
+& \textbf{Feature} & \textbf{RFE} & \textbf{Lasso} & \textbf{Fwd}\\
+\midrule
+A15   & $\checkmark$ & $\checkmark$ & ---          & A6\_e   & ---          & ---          & ---\\
+A14   & $\checkmark$ & ---          & $\checkmark$ & A6\_ff  & ---          & ---          & ---\\
+A11   & $\checkmark$ & $\checkmark$ & $\checkmark$ & A6\_i   & ---          & ---          & $\checkmark$\\
+A8    & $\checkmark$ & ---          & $\checkmark$ & A6\_j   & $\checkmark$ & ---          & ---\\
+A3    & ---          & ---          & $\checkmark$ & A6\_k   & $\checkmark$ & ---          & ---\\
+A2    & ---          & ---          & $\checkmark$ & A6\_m   & ---          & ---          & $\checkmark$\\
+A13\_p & ---         & ---          & $\checkmark$ & A6\_q   & ---          & ---          & $\checkmark$\\
+A13\_s & ---         & ---          & $\checkmark$ & A6\_r   & $\checkmark$ & ---          & $\checkmark$\\
+A12\_t & ---         & ---          & ---          & A6\_w   & ---          & ---          & ---\\
+A10\_t & $\checkmark$ & $\checkmark$ & ---          & A6\_x   & $\checkmark$ & $\checkmark$ & ---\\
+A9\_t & $\checkmark$ & $\checkmark$ & $\checkmark$ & A5\_gg  & $\checkmark$ & $\checkmark$ & $\checkmark$\\
+A7\_dd & ---         & ---          & ---          & A5\_p   & $\checkmark$ & $\checkmark$ & ---\\
+A7\_ff & ---         & ---          & $\checkmark$ & A4\_u   & ---          & ---          & ---\\
+A7\_h & ---          & ---          & $\checkmark$ & A4\_y   & $\checkmark$ & $\checkmark$ & ---\\
+A7\_j & $\checkmark$ & ---          & $\checkmark$ & A1\_b   & ---          & ---          & ---\\
+A7\_n & $\checkmark$ & ---          & ---          & A6\_c   & ---          & ---          & ---\\
+A7\_o & ---          & ---          & $\checkmark$ & A6\_cc  & $\checkmark$ & $\checkmark$ & $\checkmark$\\
+A7\_v & $\checkmark$ & ---          & ---          & A6\_d   & ---          & ---          & $\checkmark$\\
+A7\_z & $\checkmark$ & ---          & ---          & \multicolumn{4}{l}{}\\
+\midrule
+\multicolumn{8}{l}{\textbf{Total selected:} RFE 19/37, Lasso-LR 9/37, Forward 19/37.}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{German Credit --- features retained ($\checkmark$) or
+dropped (---) by each FS method.  Numeric attributes are
+\texttt{Attribute2, 5, 8, 11, 13, 16, 18}; the rest are dummies of
+the 13 categorical attributes (e.g.\ \texttt{Attribute1} is checking
+status, \texttt{Attribute3} is credit history, \texttt{Attribute4}
+is loan purpose, etc.). Shown in two columns to fit one page.}
+\singlespacing
+\label{tab:fs-ger}
+\scriptsize
+\begin{tabular}{l c c c | l c c c}
+\toprule
+\textbf{Feature} & \textbf{RFE} & \textbf{Lasso} & \textbf{Fwd}
+& \textbf{Feature} & \textbf{RFE} & \textbf{Lasso} & \textbf{Fwd}\\
+\midrule
+Attribute2          & $\checkmark$ & $\checkmark$ & $\checkmark$ & Attribute7\_A72  & ---          & $\checkmark$ & $\checkmark$\\
+Attribute5          & $\checkmark$ & $\checkmark$ & ---          & Attribute7\_A73  & ---          & $\checkmark$ & ---\\
+Attribute8          & $\checkmark$ & $\checkmark$ & ---          & Attribute7\_A74  & $\checkmark$ & $\checkmark$ & ---\\
+Attribute11         & ---          & $\checkmark$ & ---          & Attribute7\_A75  & ---          & $\checkmark$ & ---\\
+Attribute13         & ---          & $\checkmark$ & ---          & Attribute9\_A92  & ---          & $\checkmark$ & $\checkmark$\\
+Attribute16         & ---          & $\checkmark$ & $\checkmark$ & Attribute9\_A93  & $\checkmark$ & $\checkmark$ & $\checkmark$\\
+Attribute18         & ---          & $\checkmark$ & ---          & Attribute9\_A94  & ---          & $\checkmark$ & ---\\
+Attribute1\_A12     & $\checkmark$ & $\checkmark$ & ---          & Attribute10\_A102 & ---         & $\checkmark$ & ---\\
+Attribute1\_A13     & $\checkmark$ & $\checkmark$ & $\checkmark$ & Attribute10\_A103 & $\checkmark$ & $\checkmark$ & $\checkmark$\\
+Attribute1\_A14     & $\checkmark$ & $\checkmark$ & $\checkmark$ & Attribute12\_A122 & ---         & $\checkmark$ & ---\\
+Attribute3\_A31     & ---          & $\checkmark$ & $\checkmark$ & Attribute12\_A123 & ---         & $\checkmark$ & ---\\
+Attribute3\_A32     & ---          & $\checkmark$ & ---          & Attribute12\_A124 & $\checkmark$ & $\checkmark$ & $\checkmark$\\
+Attribute3\_A33     & ---          & $\checkmark$ & $\checkmark$ & Attribute14\_A142 & ---         & $\checkmark$ & $\checkmark$\\
+Attribute3\_A34     & $\checkmark$ & $\checkmark$ & $\checkmark$ & Attribute14\_A143 & $\checkmark$ & $\checkmark$ & $\checkmark$\\
+Attribute4\_A41     & $\checkmark$ & $\checkmark$ & ---          & Attribute15\_A152 & $\checkmark$ & $\checkmark$ & ---\\
+Attribute4\_A410    & $\checkmark$ & $\checkmark$ & $\checkmark$ & Attribute15\_A153 & $\checkmark$ & $\checkmark$ & ---\\
+Attribute4\_A42     & $\checkmark$ & $\checkmark$ & ---          & Attribute17\_A172 & ---         & $\checkmark$ & $\checkmark$\\
+Attribute4\_A43     & $\checkmark$ & $\checkmark$ & $\checkmark$ & Attribute17\_A173 & ---         & $\checkmark$ & ---\\
+Attribute4\_A44     & ---          & $\checkmark$ & ---          & Attribute17\_A174 & ---         & ---          & $\checkmark$\\
+Attribute4\_A45     & ---          & $\checkmark$ & ---          & Attribute19\_A192 & $\checkmark$ & $\checkmark$ & ---\\
+Attribute4\_A46     & $\checkmark$ & $\checkmark$ & $\checkmark$ & Attribute20\_A202 & $\checkmark$ & $\checkmark$ & ---\\
+Attribute4\_A48     & ---          & $\checkmark$ & $\checkmark$ & \multicolumn{4}{l}{}\\
+Attribute4\_A49     & ---          & $\checkmark$ & $\checkmark$ & \multicolumn{4}{l}{}\\
+Attribute6\_A62     & ---          & $\checkmark$ & $\checkmark$ & \multicolumn{4}{l}{}\\
+Attribute6\_A63     & $\checkmark$ & $\checkmark$ & $\checkmark$ & \multicolumn{4}{l}{}\\
+Attribute6\_A64     & $\checkmark$ & $\checkmark$ & ---          & \multicolumn{4}{l}{}\\
+Attribute6\_A65     & $\checkmark$ & $\checkmark$ & $\checkmark$ & \multicolumn{4}{l}{}\\
+\midrule
+\multicolumn{8}{l}{\textbf{Total selected:} RFE 24/48, Lasso-LR 47/48, Forward 24/48.}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Taiwan Default of Credit Card Clients --- features retained
+($\checkmark$) or dropped (---) by each FS method.  Variables follow
+the original UCI naming convention: \texttt{X1} = credit limit,
+\texttt{X2--X5} = demographics, \texttt{X6--X11} = past
+repayment-status months, \texttt{X12--X17} = past bill amounts,
+\texttt{X18--X23} = past payment amounts.}
+\singlespacing
+\label{tab:fs-tai}
+\small
+\begin{tabular}{l l c c c}
+\toprule
+\textbf{Feature} & \textbf{Meaning} & \textbf{RFE} & \textbf{Lasso-LR} & \textbf{Forward}\\
+\midrule
+X1   & credit limit                         & $\checkmark$ & $\checkmark$ & ---\\
+X2   & sex                                  & ---          & $\checkmark$ & $\checkmark$\\
+X3   & education                            & $\checkmark$ & $\checkmark$ & ---\\
+X4   & marital status                       & $\checkmark$ & $\checkmark$ & $\checkmark$\\
+X5   & age                                  & $\checkmark$ & $\checkmark$ & ---\\
+X6   & repayment status, month\,-1          & $\checkmark$ & $\checkmark$ & $\checkmark$\\
+X7   & repayment status, month\,-2          & $\checkmark$ & $\checkmark$ & ---\\
+X8   & repayment status, month\,-3          & $\checkmark$ & $\checkmark$ & ---\\
+X9   & repayment status, month\,-4          & $\checkmark$ & $\checkmark$ & ---\\
+X10  & repayment status, month\,-5          & ---          & $\checkmark$ & ---\\
+X11  & repayment status, month\,-6          & ---          & $\checkmark$ & ---\\
+X12  & bill amount, month\,-1               & $\checkmark$ & $\checkmark$ & $\checkmark$\\
+X13  & bill amount, month\,-2               & ---          & $\checkmark$ & ---\\
+X14  & bill amount, month\,-3               & $\checkmark$ & $\checkmark$ & $\checkmark$\\
+X15  & bill amount, month\,-4               & ---          & $\checkmark$ & $\checkmark$\\
+X16  & bill amount, month\,-5               & ---          & $\checkmark$ & ---\\
+X17  & bill amount, month\,-6               & ---          & ---          & $\checkmark$\\
+X18  & payment amount, month\,-1            & $\checkmark$ & $\checkmark$ & $\checkmark$\\
+X19  & payment amount, month\,-2            & $\checkmark$ & $\checkmark$ & $\checkmark$\\
+X20  & payment amount, month\,-3            & ---          & $\checkmark$ & $\checkmark$\\
+X21  & payment amount, month\,-4            & ---          & $\checkmark$ & ---\\
+X22  & payment amount, month\,-5            & ---          & $\checkmark$ & $\checkmark$\\
+X23  & payment amount, month\,-6            & ---          & $\checkmark$ & $\checkmark$\\
+\midrule
+\textbf{Total} & & \textbf{12/23} & \textbf{22/23} & \textbf{12/23}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A few observations follow from these tables.  \emph{RFE and Forward
+keep the same number of features by construction} ($\lceil p/2\rceil$)
+but pick different ones: e.g.\ on Australian, RFE keeps
+$\{$A4, A5, A7, A8, A10, A13, A14$\}$ while Forward keeps
+$\{$A1, A2, A3, A4, A6, A8, A9$\}$ --- overlap of only $\{$A4, A8$\}$.
+\emph{Lasso-LR drops far fewer features than RFE/Forward} because
+the $L_1$ penalty is calibrated by cross-validation rather than by a
+fixed retention target: it keeps 12 of 14 on Australian, 22 of 23 on
+Taiwan, and 47 of 48 on German.  On the Japanese dataset, Lasso-LR
+is the most aggressive method (only 9 of 37 kept), driven by the many
+sparsely-populated categorical-dummy columns.  Taiwan's six
+repayment-status columns (X6--X11) dominate the Lasso-LR coefficient
+ranking, while bill-amount columns (X12--X17) are more selectively
+kept; the same pattern holds in RFE.
+
+\section{Class Imbalance}
+\label{sec:imbalance}
+
+Two of the four datasets used in this thesis --- German and Taiwan
+--- have a substantial class imbalance in favour of the
+non-default class (70\%/30\% and 78\%/22\%, respectively). The
+imbalance has two effects on the classifier output: the decision
+threshold of probabilistic learners drifts toward the majority class,
+and threshold-dependent metrics under-weight the minority class.
+We address both effects with a two-step procedure.
+
+\subsection{SMOTE Oversampling}
+
+The Synthetic Minority Oversampling Technique (SMOTE) of
+\citet{chawla2002smote} balances the class distribution of the
+\emph{training} data by generating synthetic minority-class examples.
+For each minority point $\mathbf{x}_i$, SMOTE selects one of its
+$k$ minority-class neighbours $\mathbf{x}_{i'}$ at random and produces
+a synthetic example
+\begin{equation}
+\mathbf{x}_{\mathrm{syn}}
+=
+\mathbf{x}_i
++
+\delta\bigl(\mathbf{x}_{i'}-\mathbf{x}_i\bigr),
+\qquad
+\delta\sim\mathrm{Uniform}(0,1),
+\tag{3.1}
+\label{eq:smote}
+\end{equation}
+i.e.\ a convex combination of two neighbouring minority points along
+the line segment connecting them. Synthetic points are added until
+the two classes are equally represented. SMOTE is applied only to
+the \emph{training} partition --- the held-out test set is left
+untouched --- and only on the two imbalanced datasets.
+
+\subsection{GHOST Threshold Tuning}
+
+After SMOTE, the decision threshold $t$ used to convert the
+classifier's score $s(\mathbf{x})$ into a hard label is no longer
+guaranteed to be optimal at $0.5$. The GHOST procedure of
+\citet{esposito2021ghost} selects $t$ to maximise Cohen's $\kappa$
+on the training set:
+\begin{equation}
+\hat t
+=
+\arg\max_{t\in[0,1]}
+\;
+\kappa\!\left(
+\mathbb{I}\bigl(s(\mathbf{x}_i)\geq t\bigr),\,y_i,\,i=1,\ldots,N
+\right),
+\tag{3.2}
+\label{eq:ghost}
+\end{equation}
+where the search is performed by a grid scan augmented with a small
+random component for robustness. We apply GHOST on the same two
+imbalanced datasets on which SMOTE is used. On the two balanced
+datasets (Australian, Japanese) we keep the fixed threshold
+$t = 0.5$.
+
+\section{Hyperparameter Tuning by Bayesian Optimisation}
+\label{sec:bayes}
+
+Random Forest and XGBoost are sensitive to several hyperparameters
+(tree count, depth, learning rate, regularisation strength) that
+cannot be set by sensible defaults alone. We tune both classifiers
+by \emph{Bayesian optimisation} \citep{snoek2012practical}, which
+treats the cross-validated score as an unknown black-box function
+$f(\boldsymbol{\lambda})$ of the hyperparameter vector
+$\boldsymbol{\lambda}$ and approximates it by a Gaussian-process
+surrogate.
+
+\subsection{Surrogate Model}
+
+Bayesian optimisation places a Gaussian Process (GP) prior on $f$:
+\begin{equation}
+f \,\sim\, \mathcal{GP}(\mu_0,\,K),
+\tag{3.3}
+\label{eq:gp-prior}
+\end{equation}
+where $\mu_0:\Lambda\to\mathbb{R}$ is the prior mean function and
+$K:\Lambda\times\Lambda\to\mathbb{R}$ is the kernel. Under the GP
+assumption, any finite collection
+$\{f(\boldsymbol{\lambda}_1),\ldots,f(\boldsymbol{\lambda}_n)\}$
+is jointly multivariate normal. Because the multivariate normal
+distribution is conjugate to itself, the posterior over a new
+point $\boldsymbol{\lambda}^{*}$ is also Gaussian:
+\begin{equation}
+P\bigl(f^{*}\mid \boldsymbol{\lambda}^{*},\,\mathcal{D}_{n}\bigr)
+\,\sim\,
+\mathcal{N}\bigl(f^{*}\mid \mu^{*},\,(\sigma^{*})^{2}\bigr),
+\tag{3.4}
+\label{eq:gp-post}
+\end{equation}
+where $\mathcal{D}_n=\{(\boldsymbol{\lambda}_i,f(\boldsymbol{\lambda}_i))\}_{i=1}^{n}$
+is the observed data and $\mu^{*},\,(\sigma^{*})^{2}$ are the
+standard GP posterior mean and variance.
+
+\subsection{Acquisition Function}
+
+The acquisition function decides which $\boldsymbol{\lambda}$ to
+evaluate next. We use the \emph{Expected Improvement} (EI) criterion:
+\begin{equation}
+\mathrm{EI}_{y^{*}}(\boldsymbol{\lambda})
+=
+\int_{-\infty}^{y^{*}}
+\bigl(y - y^{*}\bigr)\,p(y\mid\boldsymbol{\lambda})\,dy,
+\tag{3.5}
+\label{eq:ei}
+\end{equation}
+where $y^{*}$ is the best score observed so far,
+$p(y\mid\boldsymbol{\lambda})$ is the GP posterior of
+Equation~\eqref{eq:gp-post}, and the next trial is the maximiser of
+$\mathrm{EI}$:
+$\boldsymbol{\lambda}_{n+1}=\arg\max_{\boldsymbol{\lambda}}\mathrm{EI}(\boldsymbol{\lambda})$.
+The integral admits a closed-form expression in terms of the GP
+posterior mean and variance and the standard normal cdf and pdf,
+which we omit.
+
+\subsection{Objective and Budget}
+
+For a classifier with hyperparameter vector $\boldsymbol{\lambda}$,
+we define $f$ as the $k$-fold cross-validated $F_1$-macro:
+\begin{equation}
+f(\boldsymbol{\lambda})
+=
+\frac{1}{k}
+\sum_{j=1}^{k}
+\text{F1-macro}\!\left(
+\text{model}_{\boldsymbol{\lambda}}\text{ trained on folds}\neq j,
+\text{ tested on fold }j
+\right),
+\tag{3.6}
+\label{eq:bo-objective}
+\end{equation}
+and we seek $\boldsymbol{\lambda}^{*}=\arg\max_{\boldsymbol{\lambda}} f(\boldsymbol{\lambda})$.
+
+Bayesian optimisation is run separately for each (dataset,
+feature-selection) pair. The budget is 12--25 trials per pair,
+proportional to dataset size. Each trial is a $k$-fold cross-
+validation on the training partition, with $k=3$ for the
+30\,000-row Taiwan dataset and $k=5$ for the three smaller
+datasets. After the budget is exhausted, the
+$\boldsymbol{\lambda}^{*}$ with the highest cross-validated score
+is retained, and the corresponding model is refit on the full
+training set.
+
+\section{Stacked Ensemble Configuration}
+\label{sec:stacker-config}
+
+The stacking framework of Section~\ref{sec:stacking} requires three
+design choices: the set of base learners, the set of candidate meta-
+learners, and the rule for selecting the meta from its candidates.
+Our choices are summarised in Figure~\ref{fig:stacker} and
+detailed below.
+
+\begin{figure}[ht]
+\centering
+\fbox{
+\parbox{0.92\textwidth}{
+\centering\small
+$\underbrace{\text{RF}\;\bullet\;\text{GradBoost}\;\bullet\;\text{XGBoost}\;\bullet\;\text{KNN}\;\bullet\;\text{SVM-RBF}}_{\text{Base layer: 5 classifiers}}$\\[4mm]
+$\Big\downarrow$ \quad 5-fold OOF predictions $\quad \mathbf{Z}\in\mathbb{R}^{N\times 5}$\\[4mm]
+$\underbrace{\text{LR}\;\bullet\;\text{RF}\;\bullet\;\text{XGBoost}\;\bullet\;\text{MLP}\;\bullet\;\text{GA-MaxAccLogit}}_{\text{Meta layer: 5 candidates}}$\\[4mm]
+$\Big\downarrow$ \quad best meta by $F_1$-macro \\[4mm]
+\textbf{Stacker prediction}}}
+\caption{Architecture of the stacked ensemble used in this thesis.
+The five base learners produce out-of-fold predictions that form an
+$N\times 5$ meta-feature matrix. Five candidate meta-learners are
+trained on the meta-features; the one with the highest test
+$F_1$-macro is retained. The final stacker is named after its
+winning meta, e.g.\ \emph{Stacker (LR)}, \emph{Stacker (GA)}.}
+\singlespacing
+\label{fig:stacker}
+\end{figure}
+
+\subsection{Base Layer (Five Classifiers)}
+
+The base layer consists of five learners with deliberately different
+inductive biases:
+\begin{itemize}
+ \item \textbf{Random Forest} (bagging ensemble),
+ \item \textbf{Gradient Boosting} (boosting ensemble, first-order),
+ \item \textbf{XGBoost} (boosting ensemble, regularised, second-order),
+ \item \textbf{KNN} (non-parametric, distance-based),
+ \item \textbf{SVM-RBF} (kernel method, margin-based).
+\end{itemize}
+The bias diversity is what gives the meta-learner room to manoeuvre:
+if all five base learners made identical predictions there would be
+nothing for the meta to combine.
+
+\subsection{Meta-Feature Matrix}
+
+For each base learner $h_m$, $m=1,\ldots,5$, we generate out-of-fold
+predicted probabilities via stratified 5-fold cross-validation on
+the training data, as defined by Equation~\eqref{eq:meta-features}.
+The result is a meta-feature matrix
+$\mathbf{Z}\in[0,1]^{N\times 5}$ in which each column is the OOF
+probability that the corresponding base learner assigns to the
+default class.
+
+\subsection{Meta Layer (Five Candidates)}
+
+Five candidate meta-learners are trained on
+$\{(\mathbf{z}_i,y_i)\}_{i=1}^{N}$:
+\begin{enumerate}
+ \item Logistic Regression (LR),
+ \item Random Forest (RF),
+ \item XGBoost (XGB),
+ \item Multi-Layer Perceptron (MLP) with one hidden layer,
+ \item \textbf{GA-MaxAccLogit} (defined in Section~\ref{sec:gamal}).
+\end{enumerate}
+Each candidate is evaluated on the held-out test set, and the one
+with the highest test $F_1$-macro is retained as the final meta.
+This best-meta selection is repeated for every (dataset,
+feature-selection) pair; consequently the chosen meta may differ
+between datasets and FS variants. We refer to the final stacker by
+its winning meta, e.g.\ ``Stacker (LR)'', ``Stacker (GA)''.
+
+\section{GA-MaxAccLogit Meta-learner}
+\label{sec:gamal}
+
+The fifth candidate meta-learner deserves a separate section because
+it is the methodological contribution of this thesis. It is a
+logistic-regression meta whose coefficients are fitted by a
+\emph{real-coded genetic algorithm} (RGA) rather than by maximum
+likelihood. The structure of the algorithm follows the ProfLogit
+method of \citet{stripling2018proflogit}, which was originally
+proposed for customer churn prediction; we keep ProfLogit's genetic
+machinery in its entirety but replace its profit-based fitness
+function with an $F_1$-macro-based one.
+
+\subsection{The ProfLogit Reference Algorithm}
+
+ProfLogit keeps the logistic structure of
+Equation~\eqref{eq:lr} but fits the coefficient vector
+$\boldsymbol{\theta}=(\beta_0,\beta_1,\ldots,\beta_M)^{T}$ ---
+where $M$ is the number of base learners --- by maximising a
+business-profit fitness function (the Expected Maximum Profit
+measure for customer churn, EMPC) minus an $L_1$ penalty:
+\begin{equation}
+\mathrm{fitness}_{\text{ProfLogit}}(\boldsymbol{\theta})
+=
+\text{EMPC}(\boldsymbol{\theta})
+\,-\,
+\lambda\lVert\boldsymbol{\beta}\rVert_{1},
+\tag{3.7}
+\label{eq:proflogit}
+\end{equation}
+where $\boldsymbol{\beta}=(\beta_1,\ldots,\beta_M)^{T}$ is the vector
+of non-intercept coefficients. The EMPC is non-differentiable in
+$\boldsymbol{\theta}$, so gradient-based optimisation is not
+available; the RGA, which is gradient-free, is required.
+
+\subsection{The Adaptation: GA-MaxAccLogit}
+
+In our setting the EMPC parameters --- customer lifetime value,
+retention-offer cost, contact cost --- are not defined. We
+\emph{retain} ProfLogit's RGA mechanics but \emph{replace} the
+fitness function by the classification metric of interest:
+\begin{equation}
+\boxed{\;
+\mathrm{fitness}(\boldsymbol{\theta})
+=
+\text{F1-macro}\bigl(\boldsymbol{\theta}\bigr)
+\,-\,
+\lambda\lVert\boldsymbol{\beta}\rVert_{1}.
+\;}
+\tag{3.8}
+\label{eq:gamal}
+\end{equation}
+The $L_1$ penalty $\lambda$ is selected by cross-validation on the
+training set. The resulting meta-learner directly maximises the
+metric on which the benchmark is evaluated --- an objective that
+ordinary logistic regression (fitted by maximum likelihood) cannot
+target.
+
+\subsection{Algorithm}
+
+The full procedure, adapted from \citet{stripling2018proflogit},
+is given in Algorithm~\ref{alg:gamal}.
+
+\begin{table}[H]
+\centering
+\caption{GA-MaxAccLogit: genetic algorithm for the meta-learner.}
+\singlespacing
+\label{alg:gamal}
+\small
+\begin{tabular}{@{}c p{0.86\textwidth}@{}}
+\toprule
+\textbf{Step} & \textbf{Description}\\
+\midrule
+1. & \textbf{Initialise.}\ \ Create a population of $|P|$ chromosomes
+$\boldsymbol{\theta}^{(p)}=(\beta_0^{(p)},\beta_1^{(p)},\ldots,\beta_M^{(p)})$,
+$p=1,\ldots,|P|$, by sampling each gene independently from
+$\mathrm{Uniform}(-3,3)$.\\[2mm]
+
+2. & \textbf{Soft-threshold \& evaluate.}\ \ Apply the soft-thresholding
+operator $S_\lambda(\beta)=\mathrm{sign}(\beta)\,(|\beta|-\lambda)_{+}$
+to every non-intercept gene; then compute the fitness of every
+chromosome by Equation~\eqref{eq:gamal}.\\[2mm]
+
+3. & \textbf{Elite pool.}\ \ Copy the fittest 5\% of the chromosomes
+into an elite pool $E$.\\[2mm]
+
+4. & \textbf{Genetic loop} ---\ for generations $g=1,\ldots,G$:
+\\[1mm]
+ & \quad (a) \textbf{Selection}: roulette-wheel with linear fitness
+ scaling; chromosome chosen $\propto$ scaled fitness.\\[1mm]
+ & \quad (b) \textbf{Crossover}: arithmetic, rate $p_c=0.8$; for
+ parents $\boldsymbol{\theta}^{(1)},\boldsymbol{\theta}^{(2)}$ and
+ $\mathbf{w}\sim\mathrm{Uniform}(0,1)^{M+1}$,
+ \(\boldsymbol{\theta}^{(1)}_{\text{child}}=
+ \mathbf{w}\odot\boldsymbol{\theta}^{(1)}
+ +(\mathbf{1}-\mathbf{w})\odot\boldsymbol{\theta}^{(2)}\),
+ and analogously for the second child.\\[1mm]
+ & \quad (c) \textbf{Mutation}: each gene replaced by a fresh
+ $\mathrm{Uniform}(-3,3)$ draw with probability $p_m=0.1$.\\[1mm]
+ & \quad (d) \textbf{Soft-threshold and re-evaluate} all offspring.\\[1mm]
+ & \quad (e) \textbf{Elitism}: chromosomes in $E$ replace the
+ weakest offspring to form generation $g+1$.\\[2mm]
+
+5. & \textbf{Return} the chromosome $\hat{\boldsymbol{\theta}}$ with
+the highest fitness across all generations.\\
+\bottomrule
+\end{tabular}
+\end{table}
+\subsection{Justification of the Replacement}
+
+ProfLogit's EMPC objective is non-differentiable because it involves
+an integral over the optimal classification threshold against a
+beta-distributed acceptance-rate parameter. Our $F_1$-macro
+fitness function is \emph{also} non-differentiable in
+$\boldsymbol{\theta}$ at the threshold boundaries, so the case for a
+gradient-free optimiser is the same. In other respects the
+substitution is conservative: the population structure, the
+soft-thresholding step, the roulette-wheel selection and the
+arithmetic crossover all carry over without modification. The
+$L_1$ penalty $\lambda$ continues to play the dual role identified
+by \citet{stripling2018proflogit}: it sharpens the fitness
+landscape (because the unique-maximum property of the lasso surface
+is preserved under metric substitution) and it performs an implicit
+feature selection over the base learners.
+
+This concludes the methodological framework.
+Chapter~\ref{Chapter4} describes the datasets, the preprocessing
+pipeline and the evaluation protocol; Chapter~\ref{Chapter5}
+reports the results.

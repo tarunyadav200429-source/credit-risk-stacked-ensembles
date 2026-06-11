@@ -1,0 +1,204 @@
+\chapter{Introduction}\doublespacing
+\label{Chapter1}
+\lhead{Chapter I.}
+
+Credit risk prediction is one of the oldest and most economically
+consequential applications of statistical learning. Whenever a lender
+chooses whether to extend credit to an applicant, the decision is
+backed --- explicitly or implicitly --- by a model that assigns each
+applicant a probability of default. A classifier that wrongly clears
+a defaulter incurs a direct monetary loss, while one that wrongly
+rejects a creditworthy applicant loses future revenue and damages the
+lender's competitiveness. The two errors are not symmetric in cost,
+yet both must be controlled at the same time.
+Because the consequences of a misclassification fall on real money,
+the development of credit-risk classifiers has long served as a
+proving ground for new statistical and machine-learning ideas.
+
+The literature on credit scoring covers a wide spectrum of methods:
+classical linear discriminant analysis and logistic regression, non-parametric methods
+such as $k$-nearest neighbours, decision trees and rule-based systems, and modern ensembles and neural networks
+\citep{breiman2001random,chen2016xgboost}. Across this
+body of work two observations recur:
+\begin{enumerate}
+ \item No single algorithm is uniformly best across all credit
+ datasets; the winner depends on dataset size, class balance,
+ feature mix and the metric of interest.
+ \item Combining several heterogeneous classifiers --- through bagging,
+ boosting or stacked generalisation --- tends to produce more
+ robust performance than any single learner alone
+ \citep{wolpert1992stacked}.
+\end{enumerate}
+Both observations motivate the present work. We do not propose a
+single new classifier; rather, we build a \emph{stacked ensemble} of
+existing classifiers, select its second-level (meta) learner by an
+objective rule, and submit the entire benchmark to non-parametric
+significance testing across multiple datasets so that the empirical
+ordering of the classifiers is supported by formal statistics rather
+than by raw accuracy figures alone.
+
+\section{Background and Motivation}
+\label{sec:motivation}
+
+A credit-risk classifier maps an applicant's covariate vector
+$\mathbf{x}\in\mathbb{R}^{p}$ to a binary label
+$y\in\{0,1\}$ (default or no default). In practice the classifier
+produces a score $s(\mathbf{x})\in[0,1]$ interpreted as the estimated
+probability of default; a threshold $t$ is then applied to obtain a
+crisp class label. Although this formulation is simple, three issues
+make credit datasets challenging in practice:
+
+\textbf{Class imbalance.} Defaulters are typically the minority class.
+A naive classifier that predicts the majority label for every
+applicant achieves high accuracy but is useless for the lender, who
+specifically needs to identify the minority of likely defaulters.
+The standard responses are either to resample the training data ---
+for example by the \emph{SMOTE} oversampling scheme of
+\citet{chawla2002smote} --- or to tune the decision threshold $t$
+explicitly, as in the \emph{GHOST} procedure of
+\citet{esposito2021ghost}.
+
+\textbf{Mixed feature types.} Credit applications contain numeric
+attributes (age, income, debt ratio) alongside categorical ones
+(occupation, marital status, residence type). A robust pipeline
+needs both an encoding scheme that respects this distinction and a
+scaling step that prevents the numeric attributes from dominating
+distance-based classifiers such as the $k$-nearest-neighbours rule.
+
+\textbf{Threshold and metric sensitivity.} Several widely-reported
+metrics --- accuracy, $F_1$, Cohen's $\kappa$ --- depend on a chosen
+threshold $t$. Two classifiers can produce identical area under the
+ROC curve (AUC), which is threshold-independent, and yet report very
+different accuracies because their default thresholds happen to favour
+different operating points. This is a known source of confusion in
+the benchmark literature, and our evaluation
+explicitly reports both threshold-dependent and threshold-independent
+metrics to guard against it.
+
+A further complication, often glossed over in single-dataset studies,
+is statistical: when several classifiers are compared on several
+datasets, the differences in observed performance must be assessed
+relative to the variability across datasets, not in absolute terms.
+\citet{demvsar2006statistical} laid out the now-standard
+non-parametric procedure for this purpose: a Friedman rank test
+followed by an appropriate post-hoc correction --- typically Holm
+\citep{holm1979simple} or Nemenyi --- to pin down which pairs of
+classifiers are significantly different. The present thesis applies
+this protocol to a four-dataset benchmark.
+
+\section{Problem Statement and Objectives}
+\label{sec:problem}
+
+The empirical question of this thesis is straightforward:
+\begin{quote}
+\emph{Among a representative set of credit-risk classifiers, which
+model performs most consistently across multiple available UCI
+datasets, and is its advantage statistically significant relative to
+the others?}
+\end{quote}
+The answer is operationalised by the following objectives:
+
+\begin{itemize}
+ \item[\textbf{1.}] Implement eight representative classifiers ---
+ Logistic Regression, $k$-Nearest Neighbours, Support Vector Machine
+ (RBF kernel), Decision Tree, Random Forest, Gradient Boosting,
+ XGBoost, and a Stacked Ensemble --- and apply them uniformly to
+ four UCI credit datasets (Australian, Japanese, German, Taiwan).
+ \item[\textbf{2.}] Build a feature-selection sweep with four
+ strategies (Full features, Recursive Feature Elimination,
+ L1-penalised Logistic Regression, Forward Selection) per dataset,
+ so that the comparison spans both ``unselected'' and ``selected''
+ feature regimes.
+ \item[\textbf{3.}] Make the Stacked Ensemble's second-level learner
+ a choice from five candidates (Logistic Regression, Random Forest,
+ XGBoost, Multi-Layer Perceptron, and a Genetic-Algorithm-tuned
+ logistic regression, GA-MaxAccLogit), and select the meta by an
+ objective $F_1$-macro rule on $k$-fold out-of-fold predictions.
+ The GA-MaxAccLogit meta is adapted from the ProfLogit method of
+ \citet{stripling2018proflogit}: we keep ProfLogit's genetic
+ machinery but replace its expected-profit objective with $F_1$-macro.
+ \item[\textbf{4.}] Tune Random Forest and XGBoost by \emph{Bayesian
+ optimisation} (Gaussian-process surrogate, Expected-Improvement
+ acquisition) so that the heavyweight learners are not unfairly
+ penalised by default settings \citep{snoek2012practical}.
+ \item[\textbf{5.}] Apply \emph{SMOTE} to the training data of every
+ imbalanced dataset and tune the decision threshold via \emph{GHOST}
+ on the same datasets, to guarantee that the minority class is not
+ silently ignored by the threshold-dependent metrics.
+ \item[\textbf{6.}] Evaluate every (dataset, feature-selection,
+ classifier) triple on the held-out test set using F1-macro, AUC and
+ a ten-measure diagnostic suite, and report the
+ full leaderboard.
+ \item[\textbf{7.}] Test the global null hypothesis ``all eight
+ classifiers perform equally'' by the \emph{Friedman} rank test
+ \citep{friedman1937use} across the sixteen evaluation blocks
+ (4 datasets $\times$ 4 feature-selection variants), and resolve
+ the pairwise comparisons by the \emph{Wilcoxon signed-rank} test
+ with \emph{Holm} step-down correction \citep{demvsar2006statistical}.
+\end{itemize}
+
+Objectives \textbf{1}--\textbf{6} construct the benchmark;
+objective \textbf{7} elevates the comparison from descriptive to
+inferential. The combination is what distinguishes the present
+thesis from many credit-scoring benchmarks in the literature.
+
+\section{Contributions}
+\label{sec:contributions}
+
+The principal contributions of this thesis are the following:
+
+\begin{enumerate}
+ \item A \emph{uniform pipeline} that applies the same preprocessing,
+ feature-selection sweep, hyperparameter tuning, and evaluation
+ suite to all eight classifiers on all four UCI datasets, producing
+ a leaderboard of $4\times4\times8=128$ model rows that is
+ internally consistent.
+ \item An adaptation of the ProfLogit genetic-algorithm logistic
+ model \citep{stripling2018proflogit}, here called
+ \textbf{GA-MaxAccLogit}, in which the expected-profit fitness
+ function is replaced by the classification metric $F_1$-macro
+ (penalised by an $L_1$ norm on the coefficients). The adapted
+ learner is plugged in as a candidate meta-learner of the stacked
+ ensemble.
+ \item A statistical-significance layer using \emph{Friedman} +
+ \emph{Wilcoxon-Holm} on the rank matrix of the sixteen
+ (dataset $\times$ FS) blocks, treating each block as an
+ independent evaluation. This is the methodology of
+ \citet{demvsar2006statistical} applied at the
+ block --- not dataset --- level, and it yields markedly more
+ power than the equivalent four-dataset test.
+ \item A reproducible \emph{Colab notebook bundle} containing the
+ Friedman test, the pairwise Wilcoxon-Holm post-hoc, the
+ GA-MaxAccLogit implementation, and the data-loading scripts
+ --- all runnable end-to-end on the open UCI data.
+\end{enumerate}
+
+\section{Organisation of the Thesis}
+\label{sec:organisation}
+
+The remainder of this thesis is organised as follows.
+
+\textbf{Chapter \ref{Chapter2}} reviews the eight classifiers used
+in the benchmark and develops the mathematical formulation of each.
+The stacked ensemble is introduced at the end of the chapter as the
+formal meta-learner setup that ties the previous seven together.
+
+\textbf{Chapter \ref{Chapter3}} describes the methodological
+contributions: the four feature-selection strategies, the SMOTE +
+GHOST imbalance pipeline, the Bayesian-optimisation tuning protocol,
+and the GA-MaxAccLogit meta-learner adapted from ProfLogit.
+
+\textbf{Chapter \ref{Chapter4}} describes the four UCI datasets,
+the preprocessing pipeline, the evaluation metrics, and the
+implementation environment.
+
+\textbf{Chapter \ref{Chapter5}} reports the empirical results: the
+per-dataset leaderboards, the cross-dataset comparison, the Friedman
+test, and the Wilcoxon-Holm pairwise post-hoc. The chapter ends with
+a discussion of why the Stacked Ensemble is the most consistent
+performer.
+
+\textbf{Chapter \ref{Chapter6}} concludes the thesis, discusses the
+limitations of the present study, and outlines directions for future
+work. Appendix \ref{AppendixA} reproduces the principal Python code
+listings used in the experiments.

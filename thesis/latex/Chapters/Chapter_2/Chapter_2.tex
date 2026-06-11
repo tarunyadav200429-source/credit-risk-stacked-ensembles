@@ -1,0 +1,321 @@
+\chapter{Classification Algorithms}\doublespacing
+\label{Chapter2}
+\lhead{Chapter II.}
+
+This chapter reviews the eight classifiers that make up the benchmark
+of the thesis. Two of them --- Logistic Regression and $k$-Nearest
+Neighbours --- are classical statistical methods. Five --- Decision
+Tree, Support Vector Machine, Random Forest, Gradient Boosting and
+XGBoost --- are machine-learning models. The eighth, the Stacked
+Ensemble, combines the others through a meta-learner; it is
+introduced formally in Section~\ref{sec:stacking}.
+
+Throughout the chapter let
+$D=\{(\mathbf{x}_i,y_i)\}_{i=1}^{N}$ denote the training set, with
+covariate vector $\mathbf{x}_i\in\mathbb{R}^{p}$ and binary label
+$y_i\in\{0,1\}$, where $y=1$ encodes default.
+
+\section{Logistic Regression}
+\label{sec:lr}
+
+Logistic regression is a generalised linear model with a binomial
+response and a logit link function. It models the conditional
+probability of default as
+\begin{equation}
+P(y_i=1\mid \mathbf{x}_i)
+\;=\;
+\sigma\!\left(\beta_0 + \boldsymbol{\beta}^{T}\mathbf{x}_i\right),
+\qquad
+\sigma(t)=\frac{1}{1+e^{-t}},
+\tag{2.1}
+\label{eq:lr}
+\end{equation}
+where $\beta_0\in\mathbb{R}$ is the intercept and
+$\boldsymbol{\beta}\in\mathbb{R}^{p}$ is the vector of regression
+coefficients. Estimation is by maximum likelihood: the parameters
+$(\beta_0,\boldsymbol{\beta})$ are chosen to maximise the
+log-likelihood
+\begin{equation}
+\ell(\beta_0,\boldsymbol{\beta})
+=
+\sum_{i=1}^{N}
+\bigl\{
+y_i\log\sigma(\eta_i)
++
+(1-y_i)\log\bigl(1-\sigma(\eta_i)\bigr)
+\bigr\},
+\quad
+\eta_i = \beta_0 + \boldsymbol{\beta}^{T}\mathbf{x}_i.
+\tag{2.2}
+\label{eq:lr-ll}
+\end{equation}
+Logistic regression imposes a linear decision boundary in the original
+feature space; its strength is interpretability (each coefficient
+$\beta_j$ has the log-odds interpretation), and its weakness is its
+inability to capture non-linear interactions without explicit feature
+engineering. In this thesis it serves as the classical statistical
+baseline.
+
+\section{\texorpdfstring{$k$-Nearest Neighbours}{k-Nearest Neighbours}}
+\label{sec:knn}
+
+The $k$-nearest-neighbours rule is the simplest non-parametric
+classifier: it stores the entire training set $D$ and, at prediction
+time for a new applicant $\mathbf{x}^{*}$, retrieves the $k$ training
+points closest to $\mathbf{x}^{*}$ under a chosen distance and assigns
+the majority class among them.
+
+Let $d(\mathbf{x}^{*},\mathbf{x}_i)$ denote the Euclidean distance
+between $\mathbf{x}^{*}$ and $\mathbf{x}_i$, and let
+$\mathcal{N}_k(\mathbf{x}^{*})$ be the set of indices of the $k$
+training points with the smallest $d(\mathbf{x}^{*},\cdot)$. Then
+\begin{equation}
+\hat{y}(\mathbf{x}^{*})
+=
+\mathrm{mode}
+\bigl\{
+y_i \,:\, i\in\mathcal{N}_k(\mathbf{x}^{*})
+\bigr\}.
+\tag{2.3}
+\label{eq:knn}
+\end{equation}
+$k$-NN is sensitive to the scale of the features --- the Euclidean
+distance is dominated by attributes with large numerical range ---
+so features are standardised before training. The hyperparameter
+$k$ trades off variance ($k$ small) against bias ($k$ large); we use
+$k=5$ throughout, which is the common default in scikit-learn.
+
+\section{Decision Tree}
+\label{sec:dt}
+
+A decision tree partitions the feature space by a sequence of axis-
+aligned binary splits, fitted greedily by maximising an impurity
+reduction criterion at each node. Let
+$T$ be a tree, let $\mathcal{R}_m\subset\mathbb{R}^{p}$ be the
+hyperrectangle associated with the $m$-th leaf, and let $p_{m,c}$
+denote the empirical class proportion in that leaf:
+\begin{equation}
+p_{m,c}
+=
+\frac{1}{N_m}
+\sum_{i:\,\mathbf{x}_i\in\mathcal{R}_m}
+\mathbb{I}(y_i = c),
+\qquad c\in\{0,1\},
+\tag{2.4}
+\end{equation}
+where $N_m$ is the number of training points falling into leaf $m$.
+The Gini impurity of leaf $m$ is
+\begin{equation}
+G(m)
+=
+\sum_{c=0}^{1}
+p_{m,c}(1-p_{m,c})
+=
+1 - p_{m,0}^{2} - p_{m,1}^{2}.
+\tag{2.5}
+\label{eq:gini}
+\end{equation}
+Splits are chosen to minimise the weighted sum of child impurities,
+i.e.\ to maximise $G(\text{parent})-(N_L G(L)+N_R G(R))/N$ over all
+possible split positions on each feature, where $L$ and $R$ are the
+left and right children of the current node. The tree is grown
+until a minimum-leaf or maximum-depth stopping criterion is satisfied;
+in this thesis we keep the scikit-learn defaults except for setting
+a fixed random seed.
+
+\section{Support Vector Machine}
+\label{sec:svm}
+
+The Support Vector Machine finds the linear
+hyperplane that maximises the margin between the two classes in a
+feature space possibly transformed by a kernel. For a feature map
+$\phi:\mathbb{R}^{p}\to\mathcal{H}$ inducing a kernel
+$k(\mathbf{x},\mathbf{x}')=\langle\phi(\mathbf{x}),\phi(\mathbf{x}')\rangle$,
+the soft-margin SVM solves
+\begin{equation}
+\min_{\mathbf{w},b,\boldsymbol{\xi}}
+\tfrac{1}{2}\lVert\mathbf{w}\rVert^{2}
++ C\sum_{i=1}^{N}\xi_i
+\quad\text{s.t.}\quad
+\tilde y_i\bigl(\mathbf{w}^{T}\phi(\mathbf{x}_i)+b\bigr)\geq 1-\xi_i,
+\quad \xi_i\geq 0,
+\tag{2.6}
+\label{eq:svm}
+\end{equation}
+where $\tilde y_i=2y_i-1\in\{-1,+1\}$, $C>0$ controls the trade-off
+between margin width and misclassification, and the slack variables
+$\xi_i$ allow individual training points to lie inside the margin.
+In this thesis we use the Gaussian (radial-basis-function) kernel
+\begin{equation}
+k(\mathbf{x},\mathbf{x}')
+=\exp\!\left(-\gamma\lVert\mathbf{x}-\mathbf{x}'\rVert^{2}\right),
+\tag{2.7}
+\end{equation}
+which allows non-linear decision boundaries while retaining the
+maximum-margin formulation.
+
+\section{Random Forest}
+\label{sec:rf}
+
+A Random Forest \citep{breiman2001random} is an ensemble of $B$
+decision trees grown on bootstrap samples of the training data, with
+the additional randomisation that at each split only a random subset
+of $m\leq p$ features is considered for the splitting decision. Let
+$\hat T^{(b)}(\mathbf{x})$ denote the prediction of the $b$-th tree.
+The forest's prediction is the majority vote
+\begin{equation}
+\hat y_{\mathrm{RF}}(\mathbf{x})
+=
+\mathrm{mode}
+\bigl\{\hat T^{(1)}(\mathbf{x}),\ldots,\hat T^{(B)}(\mathbf{x})\bigr\}.
+\tag{2.8}
+\label{eq:rf}
+\end{equation}
+The bootstrap sampling and random feature subsetting decorrelate the
+individual trees so that their averaged variance is smaller than the
+variance of any single tree. In our experiments $B=300$ and
+$m=\sqrt{p}$.
+
+\section{Gradient Boosting}
+\label{sec:gb}
+
+Gradient Boosting also builds an ensemble
+of trees, but the trees are added sequentially, each fitting the
+\emph{pseudo-residuals} of the previous ensemble. Starting from a
+constant predictor $F_0(\mathbf{x})$, the $m$-th boosting iteration
+solves
+\begin{equation}
+h_m
+=
+\arg\min_{h}
+\sum_{i=1}^{N}
+\bigl(
+r_{i,m} - h(\mathbf{x}_i)
+\bigr)^{2},
+\quad
+r_{i,m}
+=
+-\!\left.
+\frac{\partial L(y_i,F(\mathbf{x}_i))}{\partial F(\mathbf{x}_i)}
+\right|_{F=F_{m-1}},
+\tag{2.9}
+\label{eq:gb}
+\end{equation}
+where $L$ is the log-loss for binary classification and $h$ ranges
+over depth-limited regression trees. The new predictor is
+$F_m = F_{m-1} + \nu h_m$, with shrinkage factor $\nu\in(0,1]$.
+After $M$ boosting iterations the final classifier converts
+$F_M(\mathbf{x})$ to a probability via the logistic transformation
+$\sigma(F_M(\mathbf{x}))$.
+
+\section{XGBoost}
+\label{sec:xgb}
+
+XGBoost \citep{chen2016xgboost} is a regularised, second-order
+implementation of gradient boosting that has become the most popular
+single-classifier choice for tabular benchmarks. Its objective at
+iteration $m$ includes both the loss and an explicit complexity
+penalty:
+\begin{equation}
+\mathcal{L}^{(m)}
+=
+\sum_{i=1}^{N}
+L\!\left(y_i,F_{m-1}(\mathbf{x}_i)+h_m(\mathbf{x}_i)\right)
++
+\Omega(h_m),
+\quad
+\Omega(h)=\gamma T + \tfrac{1}{2}\lambda\lVert\mathbf{w}\rVert^{2},
+\tag{2.10}
+\label{eq:xgb}
+\end{equation}
+where $T$ is the number of leaves of $h_m$, $\mathbf{w}$ is the vector
+of leaf scores, and $\gamma,\lambda\geq 0$ are regularisation
+hyperparameters. XGBoost uses a second-order Taylor expansion of $L$
+to compute the leaf scores and split gains in closed form, which
+yields both faster training and tighter regularisation than the
+first-order gradient-boosting recursion.
+
+\section{Stacked Ensemble}
+\label{sec:stacking}
+
+Stacked Generalisation, introduced by \citet{wolpert1992stacked}, is
+a meta-learning method in which an additional model --- the
+\emph{meta-learner} $g$ --- is trained to combine the predictions of
+several \emph{base learners} $h_1,\ldots,h_M$. The principal
+challenge is to avoid \emph{data leakage}: if the meta-features were
+the in-sample predictions of the base learners, the meta would be
+trained on values that are already too optimistic.
+
+\subsection{Out-of-fold Meta-features}
+
+Stacking solves the leakage problem by $k$-fold out-of-fold (OOF)
+prediction. Partition the training set into $k$ folds. For each
+fold $j$ and each base learner $h_m$:
+\begin{enumerate}
+ \item Train $h_m$ on the data of all folds except $j$.
+ \item Predict on the held-out fold $j$.
+\end{enumerate}
+Every training point thus receives one prediction from a base learner
+that did not see it during training. Stacking these predictions
+across the $M$ base learners gives the \emph{meta-feature matrix}
+\begin{equation}
+\mathbf{z}_i
+=
+\bigl(
+h_1^{(-)}(\mathbf{x}_i),\,
+h_2^{(-)}(\mathbf{x}_i),\,
+\ldots,\,
+h_M^{(-)}(\mathbf{x}_i)
+\bigr)^{T}
+\in\mathbb{R}^{M},
+\tag{2.11}
+\label{eq:meta-features}
+\end{equation}
+where the superscript $(-)$ indicates the OOF prediction.
+
+\subsection{Meta-learner Training}
+
+The meta-learner $g$ is then estimated on the pairs
+$\{(\mathbf{z}_i,y_i)\}_{i=1}^{N}$ by minimising a loss
+$L_{\text{meta}}$:
+\begin{equation}
+g^{*}
+=
+\arg\min_{g}
+\sum_{i=1}^{N}
+L_{\text{meta}}\!\bigl(y_i,\,g(\mathbf{z}_i)\bigr).
+\tag{2.12}
+\label{eq:meta-train}
+\end{equation}
+At prediction time, each base learner is refit on the \emph{whole}
+training set, the new applicant $\mathbf{x}^{*}$ is pushed through
+all the base learners to obtain a fresh meta-feature vector
+$\mathbf{z}^{*}$, and the stacked prediction is
+$\hat y_{\mathrm{stack}}(\mathbf{x}^{*})
+= g^{*}(\mathbf{z}^{*})$.
+
+The full pipeline is summarised in
+Figure~\ref{fig:stacker} (Chapter~\ref{Chapter3}), where the
+specific choice of base and meta learners used in this thesis is
+also reported. We defer that material to Chapter~\ref{Chapter3}
+because the meta-selection rule and the GA-MaxAccLogit
+candidate are themselves methodological contributions of the work.
+
+\subsection{Why Stacking Works}
+
+The expected error of a classifier can be decomposed into the
+sum of its squared bias and its variance. Averaging the
+predictions of diverse classifiers --- as bagging does --- reduces
+the variance term but leaves the bias unchanged. Stacking, in
+contrast, lets the meta-learner \emph{re-weight} the base learners
+in a region-dependent way: when the OOF predictions reveal that
+one base learner is more accurate in a certain area of feature
+space, the meta-learner can lean on that base learner there and
+on a different base learner elsewhere. In effect the meta-learner
+can correct systematic bias of any individual base learner so
+long as the bias is detectable from the OOF predictions of the
+other base learners. This is the
+intuition behind the empirical observation, confirmed in
+Chapter~\ref{Chapter5}, that the stacked ensemble is the only
+classifier in the benchmark that is never the weak link on any
+of the four datasets.

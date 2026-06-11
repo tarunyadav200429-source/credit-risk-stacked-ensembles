@@ -1,0 +1,97 @@
+% =====================================================================
+% Mentor's certificate -- signed by Dr. K. Satish.  Layout adapted
+% from the reference letterhead (Image: WhatsApp 22.47.25), with the
+% navy / dark-red colour scheme of the original.
+%
+% Three-column header band:
+%   left  -- Dr. K. Satish contact block  (name in navy, body slate)
+%   centre -- CUR logo
+%   right -- university name (navy) + tag-line (navy) + address (maroon)
+% A horizontal rule separates the band from the body.
+%
+% Hindi tag-line "(<U+0938><U+0902><U+0938><U+0926> <U+0915><U+0947> <U+0905><U+0927><U+093F><U+0928><U+093F><U+092F><U+092E> <U+0915><U+0947> <U+0924><U+0939><U+0924> <U+0938><U+094D><U+0925><U+093E><U+092A><U+093F><U+0924> <U+0915><U+0947><U+0902><U+0926><U+094D><U+0930><U+0940><U+092F> <U+0935><U+093F><U+0936><U+094D><U+0935><U+0935><U+093F><U+0926><U+094D><U+092F><U+093E><U+0932><U+092F>)" is OMITTED -- it requires the polyglossia +
+% xelatex pipeline with a Devanagari font; if you switch the build to
+% xelatex and add a Devanagari font, drop it in above the English
+% subtitle.
+% =====================================================================
+\thispagestyle{plain}
+\singlespacing
+
+% --- colour palette used by the letterhead -----------------------------
+\definecolor{headblue}{RGB}{25, 65, 130}   % navy -- names + university header
+\definecolor{headdark}{RGB}{20, 30, 60}    % near-black blue -- subheadings
+\definecolor{addrmaroon}{RGB}{160, 50, 60} % dark red -- address lines
+\definecolor{slategrey}{RGB}{80, 90, 110}  % grey-blue -- secondary text
+
+% --- header band ------------------------------------------------------
+% All three columns use [c] alignment so the logo (shorter) sits at the
+% vertical centre of the taller text blocks on either side.
+\noindent
+\begin{minipage}[c]{0.30\textwidth}
+{\color{headblue}\bfseries\normalsize Dr.\ K.\ Satish Kumar}\\[0.5mm]
+{\color{headdark}\scriptsize\bfseries Assistant Professor\\
+Department of Statistics}\\[1.5mm]
+{\color{slategrey}\scriptsize Email\ \ \ :\ satish.kumar@curaj.ac.in\\
+Website:\ http://www.curaj.ac.in}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.18\textwidth}
+\centering
+\IfFileExists{Images/cur_logo.png}{%
+  \includegraphics[width=2cm]{Images/cur_logo.png}
+}{%
+  \IfFileExists{../curaj_logo.png}{%
+    \includegraphics[width=2cm]{../curaj_logo.png}
+  }{%
+    \fbox{\parbox[c][2cm][c]{2cm}{\centering\tiny CUR\\Logo}}
+  }
+}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.46\textwidth}
+\raggedleft
+{\color{headblue}\bfseries\large Central University of Rajasthan}\\[0.5mm]
+{\color{headblue}\scriptsize (A Central University by an Act of Parliament)}\\[1mm]
+{\color{addrmaroon}\scriptsize NH-8, Bandarsindri, 305817\\
+Kishangarh (Ajmer), Rajasthan, INDIA\\
+Phone (Office):\ +91-1463-238755 / 260200\\
+Telefax:\ +91-1463-238722}
+\end{minipage}
+
+\vspace{6mm}
+\noindent{\color{headdark}\rule{\textwidth}{0.6pt}}
+\vspace{12mm}
+
+% --- title and body ---------------------------------------------------
+\begin{center}
+{\color{headblue}\LARGE\itshape Certificate}
+\end{center}
+
+\vspace{8mm}
+\doublespacing
+
+This is to certify that the work embodied in the accompanying project
+report entitled
+\textbf{\textit{\uline{``Credit Risk Prediction via Stacked
+Ensembles and Bayesian Optimization: A Statistically Validated
+Cross-Dataset Comparison''}}}, submitted by
+\textbf{\textit{Mr.\ Tarun Yadav}}, $\mathrm{X^{th}}$ Semester Int.\
+M.Sc.\ Statistics student of the Department of Statistics, Central
+University of Rajasthan, under my supervision.
+
+\vspace{15mm}
+
+\noindent
+Place:\ Central University of Rajasthan, Ajmer\\
+Date:
+
+\vspace{15mm}
+
+\hfill
+\begin{minipage}[t]{0.55\textwidth}
+\raggedleft
+\textbf{Dr.\ K.\ Satish Kumar}\\
+(Internal Supervisor)\\
+Assistant Professor\\
+Department of Statistics
+\end{minipage}
+
+\clearpage

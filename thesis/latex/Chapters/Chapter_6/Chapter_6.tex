@@ -1,0 +1,260 @@
+\chapter{Conclusion}\doublespacing
+\label{Chapter6}
+\lhead{Chapter VI.}
+
+This thesis set out to answer the question: \emph{among a
+representative set of credit-risk classifiers, which model performs
+most consistently across multiple available UCI datasets, and is
+its advantage statistically significant relative to the others?}
+The answer that emerges from the empirical work of
+Chapters~\ref{Chapter4} and~\ref{Chapter5} is:
+
+\begin{quote}
+\textbf{The Stacked Ensemble, with its meta-learner chosen by
+$F_1$-macro on out-of-fold predictions of five diverse base learners,
+is the most consistently strong classifier across the four UCI
+credit datasets. Its advantage is supported by a Friedman test
+that rejects the global null at $p<0.001$ on every metric and by a
+Wilcoxon-Holm pairwise post-hoc that establishes
+\emph{Stacker $>$ XGBoost} at $\alpha=0.05$ on AUC.}
+\end{quote}
+
+\section{Summary of Findings}
+\label{sec:summary}
+
+The headline numbers are gathered in Table~\ref{tab:summary} for ready reference.
+
+\begin{table}[H]
+\centering
+\caption{Summary of the cross-dataset and statistical results.
+Stacker is the best classifier on every aggregate metric and the
+test statistic rejects the global null at $p<0.001$ throughout.}
+\singlespacing
+\label{tab:summary}
+\small
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{l c c c}
+\toprule
+\textbf{Result} & \textbf{$F_1$-macro} & \textbf{AUC} & \textbf{G-Mean}\\
+\midrule
+Stacker mean rank (low\,=\,best) & \textbf{2.00} & \textbf{1.38} & \textbf{2.19}\\
+Best non-stacked model & XGBoost (2.75) & RF (2.59) & XGBoost (3.66)\\
+Friedman $\chi^{2}_F$ (dof = 7) & 46.20 & 76.69 & 34.07\\
+Friedman $p$-value & $<0.001$ & $<0.001$ & $<0.001$\\
+Iman--Davenport $F_F$ & 10.53 & 32.58 & 6.56\\
+Holm-significant pairs ($\alpha=0.05$) & 8 of 28 & 16 of 28 & 7 of 28\\
+\hspace{4mm}of which \emph{Stacker $>$ X} & 3 & \textbf{6} & 5\\
+\bottomrule
+\end{tabular}
+\end{table}
+The empirical contributions can be summarised in four points:
+
+\begin{enumerate}
+ \item \textbf{Descriptive ranking.} Across the 16 evaluation
+ blocks the Stacked Ensemble has the lowest average rank on
+ $F_1$-macro (2.00), AUC (1.38) and G-Mean (2.19). Gradient
+ Boosting is the lowest-rank single (non-stacked) classifier
+ on accuracy. The classical baselines (Logistic Regression,
+ KNN, Decision Tree, SVM-RBF) consistently fill the lower half
+ of the ranking.
+ \item \textbf{Global significance.} The Friedman test rejects
+ the global null hypothesis of equal classifier performance at
+ $p<0.001$ on every one of the four metrics ($F_1$-macro, AUC,
+ accuracy, G-Mean). The Iman--Davenport $F$-correction agrees.
+ Whatever metric the credit-risk analyst chooses, the eight
+ classifiers do not perform equally on these data.
+ \item \textbf{Pairwise significance.} The Wilcoxon-Holm
+ post-hoc resolves \emph{Stacker $>$ XGBoost} at $\alpha=0.05$
+ on AUC ($p=0.0008$) and at $\alpha=0.10$ on G-Mean
+ ($p=0.0535$). The Stacker is significantly better than six
+ of seven competitors on AUC and four of seven on G-Mean.
+ On $F_1$-macro the leading trio (Stacker, XGBoost, Gradient
+ Boosting) is statistically tight; the Stacker is the
+ descriptive but not the inferential winner on this metric.
+ \item \textbf{Methodological by-products.} The GA-MaxAccLogit
+ meta-learner --- an adaptation of the ProfLogit
+ \citep{stripling2018proflogit} genetic algorithm in which the
+ expected-profit fitness is replaced by $F_1$-macro --- is
+ selected as the winning meta on a non-trivial fraction of the
+ (dataset, FS) pairs (most notably on the German and Taiwan
+ datasets). The diverse winning metas (Logistic Regression,
+ GA-MaxAccLogit, MLP, XGBoost) across the 16 blocks justify
+ the meta-candidate sweep: a fixed meta would not have
+ extracted the same performance.
+\end{enumerate}
+
+\section{Contributions Revisited}
+\label{sec:contributions-revisited}
+
+In the language of Chapter~\ref{Chapter1}, the four contributions
+have all been delivered:
+\begin{itemize}
+ \item A \emph{uniform pipeline} that applies the same
+ preprocessing, feature-selection sweep, hyperparameter-tuning
+ protocol and evaluation suite to all eight classifiers on all
+ four UCI datasets (Chapters~\ref{Chapter3} and~\ref{Chapter4}).
+ \item The \emph{GA-MaxAccLogit} meta-learner adapted from
+ ProfLogit (Section~\ref{sec:gamal}).
+ \item A \emph{statistical-significance layer} on the 16-block
+ rank matrix (Sections~\ref{sec:friedman}--\ref{sec:posthoc}).
+ \item A \emph{reproducible Colab notebook bundle} containing
+ the Friedman test, the Wilcoxon-Holm pairwise post-hoc, the
+ GA-MaxAccLogit implementation and the data-loading scripts
+ (Appendix~\ref{AppendixA}).
+\end{itemize}
+
+\section{Why the Stacked Ensemble is the Recommended Model}
+\label{sec:why-stacker}
+
+Before listing the limitations, this section states explicitly ---
+and defends --- the headline recommendation: \emph{the Stacked
+Ensemble is the model a lender should adopt}.  The argument follows
+the structure used in the credit-scoring literature that motivates
+the thesis: pair a descriptive ranking with a non-parametric
+statistical test, and accept the model that wins on both.
+
+\textbf{Descriptive evidence.}  Across the sixteen evaluation
+blocks (4 datasets $\times$ 4 feature-selection variants), the
+Stacker has the lowest average rank on every aggregate metric:
+2.00 on $F_1$-macro, 1.38 on AUC, and 2.19 on G-Mean.  On AUC the
+Stacker is the per-dataset best on \emph{every one} of the four
+datasets, a sweep that no competitor achieves.  It is never lower
+than rank \#2 on any individual block --- something we cannot say
+of XGBoost (rank \#3 on Taiwan) or Gradient Boosting (rank \#4 on
+Taiwan).
+
+\textbf{Inferential evidence.}  The Friedman rank test rejects the
+global null ``the eight classifiers perform equally'' at $p<0.001$
+on every one of the four metrics (Table~\ref{tab:friedman}).  The
+Iman--Davenport $F$-correction agrees.  The post-hoc Wilcoxon
+signed-rank test with Holm correction then resolves the pairwise
+verdicts: \emph{Stacker $>$ XGBoost} is significant at
+$\alpha=0.05$ on AUC ($p=0.0008$), and the Stacker dominates 6 of
+7 pairs on AUC and 5 of 7 on G-Mean.  Whatever metric the lender
+weights most, the Stacker is either the statistically significant
+winner (AUC, G-Mean) or the descriptive winner ($F_1$-macro,
+accuracy).
+
+\textbf{Why not the runners-up.}  XGBoost is the strongest single
+non-stacked model: it has the highest single-row $F_1$-macro on
+two of four datasets (Australian Lasso-LR 0.876; German RFE 0.708).
+But XGBoost is volatile across feature-selection variants ---
+its German mean $F_1$-macro across the four FS variants drops to
+0.655 because three of the four FS variants are weak.  A lender
+cannot rerun a feature-selection sweep on every batch of
+applicants; they pin one pipeline and run it.  The Stacker's
+narrower spread across FS variants makes it the lower-risk
+deployment choice.
+
+Gradient Boosting is the steadiest \emph{single} model (mean rank
+2.75 on $F_1$-macro), but it is significantly worse than the
+Stacker on AUC ($p<0.001$ Wilcoxon-Holm) and trails by 0.014 on
+mean AUC.  Random Forest, although strong on AUC (mean 0.851), is
+weaker on the threshold-dependent metrics because of its
+conservative leaf voting on imbalanced data.
+
+\textbf{Why $F_1$-macro is the headline classification metric.}
+The lender's two errors --- approving a defaulter (FN) and
+rejecting a creditworthy applicant (FP) --- have very different
+business consequences, but the dataset itself does not know which
+loss matters more without a cost matrix that the bank must supply.
+In the absence of a fixed cost matrix, the metric that is fair to
+\emph{both} classes is $F_1$-macro: the unweighted mean of the
+per-class $F_1$ scores.  Plain $F_1$ on the positive class can be
+inflated by a model that sacrifices the minority for the majority
+--- on Taiwan (78\%/22\%) a trivial majority-vote classifier
+scores 0.78 accuracy but $F_1=0$ on the default class.
+$F_1$-macro punishes that asymmetry, while AUC measures the
+threshold-independent ranking power.  Together they give the
+lender a complete picture of how the classifier behaves both at
+the chosen operating point ($F_1$-macro) and across all operating
+points (AUC).
+
+\textbf{Why AUC carries the burden of the formal claim.}  GHOST
+threshold tuning is fitted on the training set and is
+non-deterministic across runs; consequently
+\emph{threshold-dependent} metrics (accuracy, $F_1$-macro, F-Score,
+Cohen's $\kappa$, G-Mean, Youden's J) wobble by approximately
+$\pm 0.02$ between runs on German and Taiwan.  AUC, by contrast,
+integrates over the full ROC curve and therefore depends only on
+the classifier's ranking, not on the chosen threshold; it is
+\emph{identical} run-to-run on every classifier in our
+experiments.  This is why every formal claim
+above rests on AUC: it is the one metric for which the post-hoc
+verdict is not contaminated by GHOST stochasticity.
+
+\section{Limitations}
+\label{sec:limitations}
+
+We close the thesis by stating the limitations of the present
+work, in roughly increasing order of importance.
+
+\textbf{Number of datasets.} Four datasets is at the low end of
+what \citet{demvsar2006statistical} recommends for the Friedman
+rank test.  We compensate by treating each (dataset, FS) pair as
+an independent block, which raises the effective $n$ to 16, but
+the four-dataset constraint is real: results may shift if
+additional credit datasets (Polish, Loan Prediction, Kaggle
+``Give Me Some Credit'') are added.
+
+\textbf{GHOST threshold stochasticity.}  The GHOST threshold-tuning
+step involves a random search whose seed is not fully controlled.
+Consequently the threshold-dependent metrics on German and Taiwan
+wobble by approximately $\pm 0.02$ across runs.  AUC, by contrast,
+is threshold-independent and bit-for-bit reproducible across runs;
+this is why the formal Wilcoxon-Holm claims in
+Section~\ref{sec:why-stacker} rest on AUC rather than $F_1$-macro
+on those two datasets.  The descriptive rank ordering of
+classifiers is unaffected.
+
+\textbf{Single seed for the train/test split.} We use a fixed
+random seed (42) for the 75/25 stratified train/test split.  A
+multi-seed evaluation would give confidence intervals on the
+per-classifier metrics; we do not report these.
+
+\section{Future Work}
+\label{sec:future}
+
+The thesis is built around two classification metrics ---
+$F_1$-macro and AUC --- and the diagnostic ten-measure suite that
+surrounds them.  These are the right objectives for a study whose
+goal is to compare classifiers on a level playing field, but they
+are not the objectives a deployed credit-risk model is ultimately
+judged by.  The natural direction for future work is therefore to
+\emph{move from classification accuracy to expected profit}.
+
+In a deployed lending decision, the two errors carry very different
+monetary consequences: a false negative (approving a defaulter) loses
+the loan principal, while a false positive (rejecting a creditworthy
+applicant) loses only the future interest revenue.  Maximising
+$F_1$-macro treats these two errors symmetrically; maximising
+expected profit does not.  Restoring the original ProfLogit fitness
+function --- expected profit minus the L1 penalty --- inside the
+GA-MaxAccLogit meta-learner is therefore the natural next step.
+Concretely, Equation~\eqref{eq:gamal}'s fitness becomes
+\[
+\mathrm{fitness}(\boldsymbol{\theta})=\mathrm{EMP}(\boldsymbol{\theta})\;-\;\lambda\lVert\boldsymbol{\beta}\rVert_1,
+\]
+where $\mathrm{EMP}(\boldsymbol{\theta})$ is the expected maximum
+profit for credit scoring computed at the classifier's decision
+threshold.  Because the rest of the GA machinery
+(selection, crossover, mutation, elitism, soft-thresholding) is
+gradient-free, the only change required is in the fitness function.
+The Stacker would then optimise not the metric of \emph{statistical
+correctness} but the metric the lender's profit-and-loss statement
+cares about.
+
+A second, more straightforward extension is to validate the
+present findings on a broader collection of credit datasets.  The
+patterns observed here --- the Stacker's robustness, the GHOST
+threshold sensitivity, the dominance of repayment-status features
+for default prediction --- should hold on any sufficiently similar
+benchmark; testing on additional datasets would confirm the
+generality of the conclusion and would also increase the power of
+the Friedman and Wilcoxon-Holm post-hoc tests so that comparisons
+the current four-dataset benchmark could not resolve at
+$\alpha=0.05$ become decidable.
+
+With these two extensions the present benchmark would become a
+profit-aware, broadly validated credit-risk study --- the natural
+next step beyond this thesis.

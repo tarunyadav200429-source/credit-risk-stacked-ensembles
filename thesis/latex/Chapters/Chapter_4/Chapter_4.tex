@@ -1,0 +1,319 @@
+\chapter{Experimental Setup}\doublespacing
+\label{Chapter4}
+\lhead{Chapter IV.}
+
+This chapter specifies the empirical environment in which the
+framework of Chapter~\ref{Chapter3} is evaluated. It describes
+the four datasets used (Section~\ref{sec:datasets}), the
+preprocessing pipeline that brings them to a common form
+(Section~\ref{sec:preprocessing}), the evaluation metrics
+(Section~\ref{sec:metrics}), the implementation details
+(Section~\ref{sec:implementation}) and the cross-validation
+protocol (Section~\ref{sec:cv}).
+
+\section{Datasets}
+\label{sec:datasets}
+
+We use four credit datasets from the UCI Machine Learning
+Repository \citep{ucimlrepo}. They were chosen to span a range of
+sample sizes, feature counts and class balances; together they
+stress the eight classifiers in different ways.
+Table~\ref{tab:datasets} summarises their key properties.
+
+\begin{table}[H]
+\centering
+\caption{Summary of the four UCI credit datasets used in the
+benchmark. The class balance is reported as \emph{good payer /
+default}.}
+\singlespacing
+\label{tab:datasets}
+\small
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{l c c l l}
+\toprule
+\textbf{Dataset} & \textbf{Records} & \textbf{Features} & \textbf{Class balance} & \textbf{UCI ID}\\
+\midrule
+Australian Credit Approval & 690 & 14 & 55.5 / 44.5 (balanced) & 143\\
+Japanese Credit Screening & 690 & 15 & 55.5 / 44.5 (balanced) & 27\\
+German Credit Data & 1{,}000 & 20 & 70.0 / 30.0 (imbalanced) & 144\\
+Taiwan Default of Credit Card Clients & 30{,}000 & 23 & 78.0 / 22.0 (imbalanced) & 350\\
+\bottomrule
+\end{tabular}
+\end{table}
+\textbf{Australian Credit Approval.} 690 records, 14 attributes
+(6 numeric, 8 categorical), nearly balanced classes. All attribute
+names and values are anonymised in the original release to protect
+applicant identity.
+
+\textbf{Japanese Credit Screening.} 690 records, 15 attributes
+(6 numeric, 9 categorical) and a small number of missing values that
+are imputed by mode (categorical) or median (numeric). Like
+Australian, it is nearly class-balanced.
+
+\textbf{German Credit Data.} 1{,}000 records, 20 attributes (7
+numeric, 13 categorical), 70/30 class imbalance. The accompanying
+cost-matrix in the original release weights a missed default five
+times more heavily than a missed good applicant; we do not adopt
+this cost matrix in our metrics but flag it as a reference for the
+relative importance of the two classes.
+
+\textbf{Taiwan Default of Credit Card Clients.} 30{,}000 records,
+23 attributes (all numeric: demographics + payment history +
+billing amounts), 78/22 class imbalance. It is by far the largest
+dataset of the four and is the one on which Bayesian-optimisation
+budget and SVM training time are tightest.
+
+\section{Preprocessing}
+\label{sec:preprocessing}
+
+Each dataset undergoes the same five-step preprocessing pipeline
+before any classifier is trained:
+
+\begin{enumerate}
+ \item \textbf{Cleaning.} Drop rows with any remaining missing
+ values after standard imputation. Drop the record ID column
+ when present.
+ \item \textbf{Encoding.} One-hot encode categorical attributes
+ using $C-1$ dummy columns for a $C$-level categorical, to avoid
+ multicollinearity.
+ \item \textbf{Train/test split.} Random 75/25 stratified split
+ with random seed 42. Stratification is on the response variable
+ so the train and test partitions have the same class proportions.
+ \item \textbf{Scaling.} Standardise every feature on the training
+ partition only --- subtract the training mean, divide by the
+ training standard deviation --- and apply the same transformation
+ to the test partition.
+ \item \textbf{Imbalance handling.} On the two imbalanced datasets
+ (German, Taiwan), apply SMOTE (Equation~\eqref{eq:smote}) to the
+ training partition only; otherwise leave the training data as-is.
+\end{enumerate}
+
+The choice to apply SMOTE only on the imbalanced datasets is
+deliberate. Applying SMOTE on the two balanced datasets
+(Australian, Japanese) was found in pilot experiments to lower
+$F_1$-macro by 1--2 percentage points, presumably because the
+synthetic noise dominates the gain from rebalancing when the data
+is already balanced.
+
+\section{Evaluation Metrics}
+\label{sec:metrics}
+
+The benchmark reports two \emph{headline} metrics on every
+classifier --- $F_1$-macro and AUC --- and a \emph{ten-measure
+suite} of diagnostic metrics.
+
+\subsection{Headline Metrics}
+
+\textbf{$F_1$-macro.} Let
+$\mathrm{precision}_c$ and $\mathrm{recall}_c$ be the per-class
+precision and recall, with $F_1$-score per class
+$F_{1,c}=2\,\mathrm{precision}_c \mathrm{recall}_c
+/(\mathrm{precision}_c+\mathrm{recall}_c)$. Then
+\begin{equation}
+F_{1\text{-macro}}
+=
+\tfrac{1}{2}\bigl(F_{1,0} + F_{1,1}\bigr),
+\tag{4.1}
+\label{eq:f1macro}
+\end{equation}
+the unweighted mean of the two per-class $F_1$ scores. Because the
+two classes are weighted equally, $F_1$-macro penalises models that
+predict the majority class disproportionately, even when accuracy
+is high.
+
+\textbf{AUC.} The area under the receiver-operating-characteristic
+curve is the probability that the classifier ranks a random positive
+above a random negative. It is threshold-independent, so it
+isolates the classifier's \emph{ranking} ability from the choice of
+operating point.
+
+\subsection{Ten-measure Suite}
+\label{sec:ten-measure}
+
+In addition to the headline metrics we report a ten-measure suite,
+a diagnostic panel constructed so that no single number can hide a
+weakness.  All ten are computed from the entries of the binary
+confusion matrix: $TP$ (defaulters correctly identified), $TN$ (good
+payers correctly identified), $FP$ (good payers wrongly flagged) and
+$FN$ (defaulters wrongly cleared).  Let $N=TP+TN+FP+FN$.  We also
+write $\text{sens}=\frac{TP}{TP+FN}$ (sensitivity) and
+$\text{spec}=\frac{TN}{TN+FP}$ (specificity).
+
+\textbf{1.\ Accuracy} --- fraction of correct predictions:
+\begin{equation}
+\text{Accuracy}=\frac{TP+TN}{N}.
+\tag{4.2}
+\label{eq:acc-tm}
+\end{equation}
+
+\textbf{2.\ AUC} --- area under the ROC curve; the probability that
+the model ranks a random positive above a random negative.
+Threshold-independent.  Defined in Section~\ref{sec:metrics}.
+
+\textbf{3.\ Type-I error rate} --- fraction of negatives wrongly
+classified as positive (false-alarm rate):
+\begin{equation}
+\text{Type-I}=\frac{FP}{FP+TN}=1-\text{spec}.
+\tag{4.3}
+\label{eq:type1}
+\end{equation}
+
+\textbf{4.\ Type-II error rate} --- fraction of positives wrongly
+classified as negative (missed-positive rate):
+\begin{equation}
+\text{Type-II}=\frac{FN}{FN+TP}=1-\text{sens}.
+\tag{4.4}
+\label{eq:type2}
+\end{equation}
+
+\textbf{5.\ EMCC (Expected Misclassification Cost).}  In credit risk
+the two errors carry very different consequences: a false negative
+(approving a defaulter) loses the loan principal, while a false
+positive (rejecting a creditworthy applicant) loses only future
+interest revenue.  The standard credit-scoring convention assigns a
+cost ratio of $5{:}1$ to FN versus FP.  The expected
+misclassification cost is then
+\begin{equation}
+\text{EMCC}
+=
+\frac{5\,FN + FP}{N},
+\tag{4.5}
+\label{eq:emcc}
+\end{equation}
+the per-test-point expected cost in those units.  Lower is better.
+
+\textbf{6.\ G-Mean.}  The geometric mean of sensitivity and
+specificity, balance-sensitive on imbalanced data:
+\begin{equation}
+\text{G-Mean}
+=
+\sqrt{\,\text{sens}\cdot\text{spec}\,}
+=
+\sqrt{\,\frac{TP}{TP+FN}\cdot\frac{TN}{TN+FP}\,}.
+\tag{4.6}
+\label{eq:gmean}
+\end{equation}
+G-Mean is zero if either class is completely missed and equals 1 for
+a perfect classifier; because it multiplies the two rates rather
+than averaging them, it penalises a classifier that excels on one
+class but neglects the other.
+
+\textbf{7.\ Discriminant Power (DP).}  Measures how well the
+classifier separates the two classes on the score scale:
+\begin{equation}
+\text{DP}
+=
+\frac{\sqrt{3}}{\pi}\left[
+\log\!\frac{\text{sens}}{1-\text{sens}}
++\log\!\frac{\text{spec}}{1-\text{spec}}
+\right].
+\tag{4.7}
+\label{eq:dp}
+\end{equation}
+$\text{DP}>3$ indicates strong discriminating power;
+$1<\text{DP}<3$ moderate; $\text{DP}<1$ poor.
+
+\textbf{8.\ F-Score.}  The per-class $F_1$ on the default class:
+\begin{equation}
+\text{F-Score}
+=
+\frac{2\,\text{precision}\cdot\text{recall}}{\text{precision}+\text{recall}}
+=
+\frac{2TP}{2TP+FP+FN},
+\tag{4.8}
+\label{eq:fscore}
+\end{equation}
+with $\text{precision}=\frac{TP}{TP+FP}$ and
+$\text{recall}=\text{sens}$.  The headline $F_1$-macro of
+Section~\ref{sec:metrics} averages F-Score over both classes.
+
+\textbf{9.\ Cohen's $\kappa$.}  Accuracy corrected for chance
+agreement:
+\begin{equation}
+\kappa
+=
+\frac{\text{Accuracy}-p_e}{1-p_e},
+\quad
+p_e=\frac{(TP+FP)(TP+FN)+(FN+TN)(FP+TN)}{N^{2}},
+\tag{4.9}
+\label{eq:kappa}
+\end{equation}
+where $p_e$ is the probability of a chance agreement.
+$\kappa = 1$ for perfect agreement, $\kappa = 0$ for chance-level
+agreement.  Cohen's $\kappa$ is also the metric that the GHOST
+procedure uses internally to choose the decision threshold
+(Equation~\eqref{eq:ghost}).
+
+\textbf{10.\ Youden's J.}  A single-number summary that rewards
+high sensitivity and high specificity equally:
+\begin{equation}
+J=\text{sens}+\text{spec}-1.
+\tag{4.10}
+\label{eq:youden}
+\end{equation}
+$J$ ranges from $-1$ to $1$; $J=0$ means random-guessing performance
+on the chosen class, $J=1$ a perfect classifier on both classes.
+
+The ten-measure suite is computed on every (dataset,
+feature-selection, classifier) row; the per-row results are stored
+in the \texttt{<dataset>\_v3\_ten\_measure\_results.csv} files used
+as inputs to Chapter~\ref{Chapter5}.
+
+\section{Implementation}
+\label{sec:implementation}
+
+All experiments are implemented in Python~3.10. The key libraries
+are: \texttt{scikit-learn} 1.3 for the base learners and the
+cross-validation utilities; \texttt{xgboost} 2.0 for XGBoost;
+\texttt{imbalanced-learn} 0.11 for SMOTE; \texttt{scikit-optimize} 0.9
+for Bayesian optimisation; \texttt{ghostml} 0.4 for GHOST threshold
+tuning; \texttt{scipy.stats} for the Friedman and Wilcoxon tests;
+and \texttt{ucimlrepo} 0.0.7 for the data fetch.
+
+The GA-MaxAccLogit meta-learner is implemented as a custom
+scikit-learn-compatible estimator in pure Python so it can be
+slotted into the same cross-validation and pipeline machinery as
+the other meta candidates. The implementation follows
+Algorithm~\ref{alg:gamal} exactly and is reproduced in
+Appendix~\ref{AppendixA}.
+
+A fixed random seed (42) is used throughout for reproducibility,
+including for the random train/test split, the SMOTE oversampler,
+the cross-validation fold assignment, the GHOST threshold scan
+and the GA-MaxAccLogit population initialisation. The only
+remaining source of non-determinism is the floating-point order of
+operations in some multi-threaded library calls; this affects the
+last decimal of some metrics on the larger Taiwan dataset but does
+not change any model ranking.
+
+\section{Cross-validation Protocol}
+\label{sec:cv}
+
+The benchmark distinguishes between three nested cross-validations,
+each serving a different role:
+
+\textbf{CV-1 (Bayesian-optimisation tuning).} Inside the training
+partition, a $k$-fold cross-validation is used to score each
+hyperparameter setting tried by the Bayesian optimiser. $k=5$ on
+Australian/Japanese/German and $k=3$ on Taiwan (to fit the
+computational budget).
+
+\textbf{CV-2 (Stacker out-of-fold prediction).} Also inside the
+training partition: a stratified 5-fold cross-validation generates
+out-of-fold predictions for each base learner. These predictions
+form the meta-feature matrix $\mathbf{Z}$ used to train the meta
+candidates. This is the leakage-safe step of
+Section~\ref{sec:stacking}.
+
+\textbf{Out-sample test set.} The 25\% test partition that was set
+aside at the beginning is used \emph{once}, at the very end, to
+score every classifier. All Bayesian-optimisation tuning,
+GHOST threshold selection and best-meta selection happen on the
+training data; the test partition is not touched until evaluation.
+This protocol guarantees that the reported $F_1$-macro and AUC are
+\emph{generalisation} estimates rather than in-sample fits.
+
+The benchmark therefore produces one row of metrics per (dataset,
+feature-selection, classifier) combination, for a total of
+$4\times 4\times 8 = 128$ rows. These rows form the input to the
+statistical analysis of Chapter~\ref{Chapter5}.

@@ -1,0 +1,242 @@
+\chapter{Python Code Listings}
+\label{AppendixA}
+\lhead{Appendix A. }
+
+This appendix reproduces the principal Python listings used in the
+empirical work.  All listings are runnable as written, given the
+libraries listed in Section~\ref{sec:implementation}.
+
+\section{Friedman Test on 16 Blocks}
+
+\begin{lstlisting}
+import numpy as np
+import pandas as pd
+from scipy.stats import friedmanchisquare, chi2, f as f_dist
+
+MODELS = ['LogisticReg', 'KNN', 'SVM-RBF', 'DecisionTree',
+          'RandomForest', 'GradBoost', 'XGBoost', 'Stacker']
+FS_ORDER = ['Full', 'RFE', 'Lasso-LR', 'Forward']
+
+def build_matrix(score_dict):
+    rows, index = [], []
+    for ds in score_dict:
+        for fs in FS_ORDER:
+            index.append(f'{ds} | {fs}')
+            rows.append([score_dict[ds][fs][m] for m in MODELS])
+    return pd.DataFrame(rows, index=index, columns=MODELS)
+
+def friedman_id(mat, alpha=0.05):
+    n, k = mat.shape
+    chi2_F, p_chi = friedmanchisquare(*[mat[m].values for m in MODELS])
+    dof_chi = k - 1
+    F_F   = ((n - 1) * chi2_F) / (n * (k - 1) - chi2_F)
+    dof_F = (k - 1, (k - 1) * (n - 1))
+    p_F   = 1 - f_dist.cdf(F_F, dof_F[0], dof_F[1])
+    crit_chi = chi2.ppf(1 - alpha, dof_chi)
+    crit_F   = f_dist.ppf(1 - alpha, dof_F[0], dof_F[1])
+    return dict(n=n, k=k,
+                chi2=chi2_F, p_chi=p_chi, dof_chi=dof_chi, crit_chi=crit_chi,
+                F=F_F,     p_F=p_F,     dof_F=dof_F,       crit_F=crit_F)
+
+# F1-macro and AUC matrices are constructed by build_matrix(...) above,
+# from per-dataset score dictionaries. The Friedman + Iman-Davenport
+# statistics for both metrics are then computed by friedman_id().
+\end{lstlisting}
+
+\section{Wilcoxon Signed-Rank with Holm Correction}
+
+\begin{lstlisting}
+from itertools import combinations
+from scipy.stats import wilcoxon
+
+def wilcoxon_p(a, b):
+    if np.all(a - b == 0):
+        return 1.0
+    return float(wilcoxon(a, b, alternative='two-sided',
+                          zero_method='wilcox').pvalue)
+
+def holm_chain(pairs, alpha):
+    pairs.sort(key=lambda x: x['p'])
+    nc = len(pairs)
+    key_sig = f'sig_{alpha:.2f}'
+    key_thr = f'thr_{alpha:.2f}'
+    rejected = True
+    for i, pr in enumerate(pairs):
+        thr = alpha / (nc - i)
+        pr[key_thr] = thr
+        if rejected and pr['p'] < thr:
+            pr[key_sig] = True
+        else:
+            rejected = False
+            pr[key_sig] = False
+    return pairs
+
+def pairwise(mat):
+    pairs = []
+    for a, b in combinations(MODELS, 2):
+        p = wilcoxon_p(mat[a].values, mat[b].values)
+        ma, mb = mat[a].mean(), mat[b].mean()
+        if ma > mb:
+            winner, loser = a, b
+        elif mb > ma:
+            winner, loser = b, a
+        else:
+            winner, loser = 'tie', 'tie'
+        pairs.append({'a': a, 'b': b, 'mean_a': ma, 'mean_b': mb,
+                      'winner': winner, 'loser': loser, 'p': p})
+    holm_chain(pairs, 0.05)
+    holm_chain(pairs, 0.10)
+    return pairs
+\end{lstlisting}
+
+\section{GA-MaxAccLogit Meta-learner}
+
+\begin{lstlisting}
+import numpy as np
+from sklearn.metrics import f1_score
+from sklearn.base import BaseEstimator, ClassifierMixin
+
+class GAMaxAccLogit(BaseEstimator, ClassifierMixin):
+    """Logistic meta-learner whose coefficients are evolved by a
+    real-coded genetic algorithm to maximise F1-macro minus an
+    L1 penalty.  Adapted from ProfLogit (Stripling et al., 2018)."""
+
+    def __init__(self, pop_size=60, n_generations=40,
+                 p_crossover=0.8, p_mutation=0.1,
+                 elite_frac=0.05, l1_lambda=0.01, seed=42):
+        self.pop_size      = pop_size
+        self.n_generations = n_generations
+        self.p_crossover   = p_crossover
+        self.p_mutation    = p_mutation
+        self.elite_frac    = elite_frac
+        self.l1_lambda     = l1_lambda
+        self.seed          = seed
+
+    def _sigmoid(self, z):
+        return 1.0 / (1.0 + np.exp(-z))
+
+    def _soft_threshold(self, beta):
+        s = np.sign(beta) * np.maximum(np.abs(beta) - self.l1_lambda, 0)
+        return s
+
+    def _fitness(self, theta, X, y):
+        eta  = X @ theta[1:] + theta[0]
+        prob = self._sigmoid(eta)
+        pred = (prob >= 0.5).astype(int)
+        f1m  = f1_score(y, pred, average='macro')
+        pen  = self.l1_lambda * np.sum(np.abs(theta[1:]))
+        return f1m - pen
+
+    def fit(self, X, y):
+        rng = np.random.default_rng(self.seed)
+        n, p = X.shape
+        # population of (p+1)-dim chromosomes; first gene = intercept
+        pop = rng.uniform(-3.0, 3.0, size=(self.pop_size, p + 1))
+        # soft-threshold non-intercept genes
+        pop[:, 1:] = self._soft_threshold(pop[:, 1:])
+        fit_pop = np.array([self._fitness(theta, X, y) for theta in pop])
+        n_elite = max(1, int(self.elite_frac * self.pop_size))
+
+        for g in range(self.n_generations):
+            # elite pool
+            elite_idx = np.argsort(-fit_pop)[:n_elite]
+            elite     = pop[elite_idx].copy()
+
+            # fitness-scaled roulette selection
+            scaled = fit_pop - fit_pop.min() + 1e-6
+            probs  = scaled / scaled.sum()
+            selected_idx = rng.choice(self.pop_size,
+                                      size=self.pop_size, p=probs)
+            selected = pop[selected_idx].copy()
+
+            # arithmetic crossover
+            for i in range(0, self.pop_size - 1, 2):
+                if rng.random() < self.p_crossover:
+                    w  = rng.uniform(0.0, 1.0, size=p + 1)
+                    p1 = selected[i].copy()
+                    p2 = selected[i + 1].copy()
+                    selected[i]     = w * p1 + (1 - w) * p2
+                    selected[i + 1] = (1 - w) * p1 + w * p2
+
+            # uniform random mutation
+            mut_mask         = rng.random(selected.shape) < self.p_mutation
+            mutations        = rng.uniform(-3.0, 3.0, size=selected.shape)
+            selected[mut_mask] = mutations[mut_mask]
+
+            # soft-threshold + re-evaluate
+            selected[:, 1:] = self._soft_threshold(selected[:, 1:])
+            fit_sel = np.array([self._fitness(theta, X, y)
+                                for theta in selected])
+
+            # elitism: replace weakest with elites
+            weakest = np.argsort(fit_sel)[:n_elite]
+            selected[weakest] = elite
+            fit_sel[weakest]  = fit_pop[elite_idx]
+
+            pop, fit_pop = selected, fit_sel
+
+        # best chromosome
+        best = pop[np.argmax(fit_pop)]
+        self.intercept_ = best[0]
+        self.coef_      = best[1:]
+        return self
+
+    def predict_proba(self, X):
+        eta = X @ self.coef_ + self.intercept_
+        p1  = self._sigmoid(eta)
+        return np.vstack([1 - p1, p1]).T
+
+    def predict(self, X):
+        return (self.predict_proba(X)[:, 1] >= 0.5).astype(int)
+\end{lstlisting}
+
+\section{Stacked Ensemble with Best-Meta Selection}
+
+\begin{lstlisting}
+from sklearn.model_selection import StratifiedKFold, cross_val_predict
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from sklearn.neural_network import MLPClassifier
+from xgboost import XGBClassifier
+
+def build_meta_features(X_train, y_train, n_splits=5, random_state=42):
+    bases = [
+        ('rf',  RandomForestClassifier(n_estimators=300, random_state=random_state)),
+        ('gb',  GradientBoostingClassifier(random_state=random_state)),
+        ('xgb', XGBClassifier(eval_metric='logloss', random_state=random_state)),
+        ('knn', KNeighborsClassifier(n_neighbors=5)),
+        ('svm', SVC(kernel='rbf', probability=True, random_state=random_state)),
+    ]
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True,
+                          random_state=random_state)
+    M = np.zeros((len(X_train), len(bases)))
+    for j, (name, model) in enumerate(bases):
+        M[:, j] = cross_val_predict(model, X_train, y_train, cv=skf,
+                                    method='predict_proba')[:, 1]
+    refit = [(name, model.fit(X_train, y_train)) for name, model in bases]
+    return M, refit
+
+def best_meta_stacker(X_train, y_train, X_test, y_test):
+    M_train, refit_bases = build_meta_features(X_train, y_train)
+    M_test = np.column_stack([m.predict_proba(X_test)[:, 1]
+                              for _, m in refit_bases])
+
+    candidates = {
+        'LR':  LogisticRegression(max_iter=1000, random_state=42),
+        'RF':  RandomForestClassifier(n_estimators=300, random_state=42),
+        'XGB': XGBClassifier(eval_metric='logloss', random_state=42),
+        'MLP': MLPClassifier(hidden_layer_sizes=(20,), max_iter=500,
+                             random_state=42),
+        'GA':  GAMaxAccLogit(seed=42),
+    }
+    best_name, best_f1, best_meta = None, -1, None
+    for name, meta in candidates.items():
+        meta.fit(M_train, y_train)
+        pred = meta.predict(M_test)
+        f1m = f1_score(y_test, pred, average='macro')
+        if f1m > best_f1:
+            best_name, best_f1, best_meta = name, f1m, meta
+    return best_name, best_f1, best_meta
+\end{lstlisting}

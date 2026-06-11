@@ -1,0 +1,68 @@
+% =====================================================================
+% Title page -- adapted from the Aradhna PhD title-page template, with
+% Tarun Yadav's credentials swapped in.
+% Requires:  xcolor[dvipsnames]  (loaded in main.tex)
+%            tikz, graphicx       (also loaded in main.tex)
+% =====================================================================
+\begin{titlepage}
+\newpage
+\pagecolor{White}
+
+\begin{tikzpicture}[remember picture, overlay]
+  % Decorative double border around the title page
+  \draw[line width = 1.2pt]
+    ([xshift= 1.6cm, yshift=-1.6cm]current page.north west) rectangle
+    ([xshift=-1.6cm, yshift= 1.6cm]current page.south east);
+  \draw[line width = 0.5pt]
+    ([xshift= 1.8cm, yshift=-1.8cm]current page.north west) rectangle
+    ([xshift=-1.8cm, yshift= 1.8cm]current page.south east);
+\end{tikzpicture}
+
+
+%\begin{flushright}
+%\textcolor{Black}{Enrollment No.: 2021IMSST021}
+%\end{flushright}
+\begin{center}
+
+\textcolor{Black}{\textbf{ \Large \vspace{0.2cm} CREDIT RISK PREDICTION VIA STACKED ENSEMBLES AND BAYESIAN OPTIMIZATION \\[0.4cm] A STATISTICALLY VALIDATED CROSS-DATASET COMPARISON}} \\[0.3cm] % Thesis title
+
+ \textit{ \\ A THESIS SUBMITTED TO CENTRAL UNIVERSITY OF RAJASTHAN \\[0.1cm] IN PARTIAL FULFILLMENT OF
+ THE REQUIREMENTS\\[0.1cm] FOR THE AWARD OF THE DEGREE OF}\\ [1cm]
+\textcolor{Black}{\large \vspace{0.4cm} \textbf{INTEGRATED MASTER OF SCIENCE \\
+IN\\
+\vspace{0.4cm} STATISTICS}} \\[1cm]
+
+\begin{center} \textcolor{Black}{
+  \vspace{0.3cm} SUBMITTED BY\\[0.5cm]
+\textbf{\large TARUN YADAV}\\
+Enrollment No.: 2021IMSST021}
+ \end{center}
+ \begin{center}\textcolor{Black}{
+  UNDER THE SUPERVISION OF  \\[1cm]
+ \begin{tabular}{cc}
+    \textbf{\large Mr.\ Rahul Singh Chauhan}  & \textbf{\large Dr.\ K.\ Satish Kumar}\\
+     (Supervisor) & (Internal Supervisor) \\
+     General Manager & Assistant Professor \\
+     Dusker AI & Department of Statistics \\
+                                              & Central University of Rajasthan, Rajasthan.
+ \end{tabular}
+}
+ \end{center}
+
+\IfFileExists{Images/cur_logo.png}{%
+  \includegraphics[scale=0.2]{Images/cur_logo.png}
+}{%
+  \IfFileExists{../curaj_logo.png}{%
+    \includegraphics[scale=0.2]{../curaj_logo.png}
+  }{%
+    \fbox{\parbox[c][3cm][c]{3cm}{\centering\small CUR\\Logo}}
+  }
+}\\
+ [0.5cm]
+
+\textcolor{Black}{\textbf{DEPARTMENT OF STATISTICS
+}\\
+\vspace{0.4cm} CENTRAL UNIVERSITY OF RAJASTHAN, NH-8, BANDARSINDRI, KISHANGARH (AJMER), RAJASTHAN -305817, INDIA\\
+\vspace{0.5cm} 2026}
+\end{center}
+\end{titlepage}
