@@ -27,6 +27,24 @@ contains the thesis, the reproducible notebook bundle, and the four public datas
 
 ---
 
+## 🎯 Objective & outcome
+
+**Objective —** find which credit-risk classifier is the **most consistent across multiple
+datasets**, and test whether its advantage is **statistically significant** (not just a lucky
+average on one dataset).
+
+**What this project does —** runs **one uniform pipeline** over **8 classifiers × 4 UCI credit
+datasets × 4 feature-selection variants (128 model rows)** with Bayesian hyperparameter tuning,
+then submits the whole benchmark to **non-parametric significance testing** (Friedman +
+Wilcoxon–Holm post-hoc).
+
+**Did we achieve it? ✅ Yes.** A **Stacked Ensemble** is the most consistent performer (highest
+mean F1-macro **and** AUC, and the per-dataset best AUC on **all four** datasets), and its edge
+is **statistically validated** — Friedman **p < 0.001** on every metric, with Wilcoxon–Holm
+establishing **Stacker > XGBoost (p = 0.0008)** on AUC.
+
+---
+
 ## Headline Result
 
 Averaged over the four feature-selection variants on each dataset and then over the four datasets,
