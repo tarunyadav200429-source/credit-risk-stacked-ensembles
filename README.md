@@ -27,21 +27,22 @@ contains the thesis, the reproducible notebook bundle, and the four public datas
 
 ---
 
-## 🎯 Objective & outcome
+## What I set out to do
 
-**Objective —** find which credit-risk classifier is the **most consistent across multiple
-datasets**, and test whether its advantage is **statistically significant** (not just a lucky
-average on one dataset).
+This was my M.Sc. thesis, so I wanted the question to be one I could defend statistically — not
+just "which model gets the highest accuracy on one dataset." What I actually wanted to know
+was: across several different credit datasets, which classifier is the most consistent, and is
+its lead real or just luck on a single dataset?
 
-**What this project does —** runs **one uniform pipeline** over **8 classifiers × 4 UCI credit
-datasets × 4 feature-selection variants (128 model rows)** with Bayesian hyperparameter tuning,
-then submits the whole benchmark to **non-parametric significance testing** (Friedman +
-Wilcoxon–Holm post-hoc).
+To keep it fair I built one uniform pipeline and ran the exact same treatment on everything —
+8 classifiers across 4 UCI credit datasets and 4 feature-selection variants, which works out to
+128 model runs — with Bayesian hyperparameter tuning, and then put the whole benchmark through
+non-parametric significance testing (Friedman, followed by a Wilcoxon–Holm post-hoc).
 
-**Did we achieve it? ✅ Yes.** A **Stacked Ensemble** is the most consistent performer (highest
-mean F1-macro **and** AUC, and the per-dataset best AUC on **all four** datasets), and its edge
-is **statistically validated** — Friedman **p < 0.001** on every metric, with Wilcoxon–Holm
-establishing **Stacker > XGBoost (p = 0.0008)** on AUC.
+**How it turned out:** a stacked ensemble came out as the most consistent — best mean F1-macro
+and AUC, and the top AUC on all four datasets. More importantly it held up statistically
+(Friedman p < 0.001, and the post-hoc confirmed it beats XGBoost on AUC at p = 0.0008), so it
+was a claim I could actually stand behind in the viva.
 
 ---
 
