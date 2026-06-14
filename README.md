@@ -18,9 +18,9 @@ contains the thesis, the reproducible notebook bundle, and the four public datas
 > most consistently across multiple UCI datasets, and is its advantage statistically significant
 > relative to the others?*
 >
-> **Answer.** A **Stacked Ensemble** — whose meta-learner is chosen by F1-macro on the out-of-fold
-> predictions of five diverse base learners — is the most consistently strong classifier across the
-> four datasets. Its advantage is backed by a **Friedman test (p < 0.001 on every metric)** and a
+> **Answer.** It was a **Stacked Ensemble** — I pick its meta-learner by F1-macro on the out-of-fold
+> predictions of five diverse base learners — that held up as the most consistently strong classifier
+> across the four datasets. I can back that with a **Friedman test (p < 0.001 on every metric)** and a
 > **Wilcoxon–Holm post-hoc that establishes Stacker > XGBoost at α = 0.05 on AUC (p = 0.0008)**.
 
 📄 **[Read the full thesis (PDF)](thesis/Credit_Risk_Prediction_Thesis.pdf)**
@@ -48,9 +48,10 @@ was a claim I could actually stand behind in the viva.
 
 ## Headline Result
 
-Averaged over the four feature-selection variants on each dataset and then over the four datasets,
-the Stacked Ensemble has the **highest mean F1-macro and the highest mean AUC** of all eight models
-— and it is the per-dataset best on **AUC for all four datasets**, a sweep no competitor achieves.
+Once I averaged over the four feature-selection variants on each dataset and then over the four
+datasets, the Stacked Ensemble came out with the **highest mean F1-macro and the highest mean AUC**
+of all eight models — and it was the per-dataset best on **AUC for all four datasets**, a sweep none
+of the others managed.
 
 | Model | Mean F1-macro | Mean AUC |
 |-------|:-------------:|:--------:|
@@ -69,9 +70,10 @@ the Stacked Ensemble has the **highest mean F1-macro and the highest mean AUC** 
 
 ## What Was Built
 
-A **uniform pipeline** that applies the *same* preprocessing, feature-selection sweep, hyperparameter
-tuning, and evaluation suite to **8 classifiers × 4 datasets × 4 feature-selection variants = 128
-model rows**, then submits the whole benchmark to non-parametric significance testing.
+I built a **uniform pipeline** that puts the *same* preprocessing, feature-selection sweep,
+hyperparameter tuning, and evaluation suite through **8 classifiers × 4 datasets × 4 feature-selection
+variants = 128 model rows**, and then runs the whole benchmark through non-parametric significance
+testing.
 
 **Eight classifiers.** Logistic Regression · k-Nearest Neighbours · Decision Tree · SVM (RBF) ·
 Random Forest · Gradient Boosting · XGBoost · **Stacked Ensemble**.
@@ -114,11 +116,11 @@ L1-penalised Logistic Regression (Lasso-LR) · Forward Selection.
 - **Bayesian optimisation.** Random Forest and XGBoost are tuned with a Gaussian-process surrogate and
   an Expected-Improvement acquisition function (12–25 trials per dataset/FS pair), optimising
   cross-validated F1-macro.
-- **GA-MaxAccLogit — the methodological contribution.** A logistic meta-learner whose coefficients are
-  evolved by a real-coded genetic algorithm. It adapts the **ProfLogit** method of Stripling et al.
-  (2018), keeping the genetic machinery intact but **replacing the expected-profit fitness with
+- **GA-MaxAccLogit — my methodological contribution.** A logistic meta-learner whose coefficients are
+  evolved by a real-coded genetic algorithm. I adapted the **ProfLogit** method of Stripling et al.
+  (2018): I kept the genetic machinery intact but **replaced the expected-profit fitness with
   F1-macro − L1 penalty**. Implementation in [`thesis/latex/Appendices/AppendixA.tex`](thesis/latex/Appendices/AppendixA.tex).
-- **Evaluation.** Two headline metrics (F1-macro, AUC) plus a **ten-measure diagnostic suite**
+- **Evaluation.** I report two headline metrics (F1-macro, AUC) plus a **ten-measure diagnostic suite**
   (Accuracy, Type-I/II error, EMCC at the 5:1 credit cost ratio, G-Mean, Discriminant Power, F-Score,
   Cohen's κ, Youden's J) so that no single number can hide a weakness.
 
@@ -126,8 +128,8 @@ L1-penalised Logistic Regression (Lasso-LR) · Forward Selection.
 
 ## Statistical Validation
 
-Each `(dataset × feature-selection)` pair is treated as one evaluation **block**, giving **n = 16
-blocks** for **k = 8** classifiers — more powerful than a four-dataset test.
+I treat each `(dataset × feature-selection)` pair as one evaluation **block**, which gives me **n = 16
+blocks** for **k = 8** classifiers — more powerful than a plain four-dataset test.
 
 **Average ranks (lower is better), Table 5.7:**
 
@@ -152,10 +154,10 @@ every metric (5% critical values: χ²(7) = 14.067, F(7,105) = 2.098):
 | Accuracy | 28.62 | 5.15 | < 0.001 | reject H₀ |
 | G-Mean | 34.07 | 6.56 | < 0.001 | reject H₀ |
 
-**Wilcoxon signed-rank + Holm post-hoc** (28 pairs). On AUC the Stacker is significantly better than
-**6 of 7** competitors at α = 0.05 — including the decisive **Stacker > XGBoost (p = 0.0008)**, the
-comparison a four-dataset analysis could not resolve. On F1-macro the leading trio (Stacker, XGBoost,
-Gradient Boosting) is statistically tight.
+**Wilcoxon signed-rank + Holm post-hoc** (28 pairs). On AUC the Stacker came out significantly better
+than **6 of 7** competitors at α = 0.05 — including the one I cared about most, **Stacker > XGBoost
+(p = 0.0008)**, which is the comparison a four-dataset analysis could not resolve. On F1-macro the
+leading trio (Stacker, XGBoost, Gradient Boosting) stays statistically tight.
 
 ---
 
@@ -170,8 +172,9 @@ Best `(classifier, feature-selection)` row by F1-macro on each dataset (Table 5.
 | German | XGBoost | RFE | 0.750 | 0.708 | 0.748 |
 | Taiwan | **Stacker (MLP)** | Lasso-LR | 0.798 | 0.704 | 0.773 |
 
-The Stacker **wins** Japanese and Taiwan and is the **runner-up** on Australian and German — it is
-never the weak link on any dataset. No single feature-selection method dominates across datasets.
+The Stacker **wins** Japanese and Taiwan and is the **runner-up** on Australian and German — so it is
+never the weak link on any dataset, which was the consistency I was after. No single feature-selection
+method dominated across datasets.
 
 ---
 
@@ -219,14 +222,14 @@ Wilcoxon), `ucimlrepo 0.0.7` (data fetch). A fixed seed (42) is used throughout 
 
 *(thesis §6.4–6.5)*
 
-- **Four datasets** is at the low end of what the Friedman test recommends; the 16-block design
-  compensates but the constraint is real.
-- **GHOST threshold tuning** is mildly stochastic, so threshold-dependent metrics wobble by ≈ ±0.02 on
-  German and Taiwan — which is why every *formal* claim rests on the reproducible AUC.
-- **Single train/test seed** (42); a multi-seed study would add confidence intervals.
-- **Future direction:** swap the GA-MaxAccLogit fitness back to **expected profit** (restore ProfLogit's
-  EMP objective) so the stacker optimises the lender's profit-and-loss rather than a symmetric metric,
-  and validate on more credit datasets.
+- **Four datasets** is at the low end of what the Friedman test recommends; my 16-block design
+  compensates for it, but I won't pretend the constraint isn't real.
+- **GHOST threshold tuning** is mildly stochastic, so the threshold-dependent metrics wobble by ≈ ±0.02
+  on German and Taiwan — that's why I rest every *formal* claim on the reproducible AUC instead.
+- **Single train/test seed** (42); a multi-seed study would let me add confidence intervals.
+- **Where I'd take it next:** swap the GA-MaxAccLogit fitness back to **expected profit** (restore
+  ProfLogit's EMP objective) so the stacker optimises the lender's profit-and-loss rather than a
+  symmetric metric, and validate on more credit datasets.
 
 ---
 
